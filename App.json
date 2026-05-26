@@ -1,0 +1,58 @@
+{
+  "name": "Adevos Min-Bot",
+  "description": "WhatsApp & Telegram automation bot with web interface",
+  "keywords": ["whatsapp", "telegram", "bot", "baileys"],
+  "website": "https://t.me/Adevos_X",
+  "repository": "https://github.com/babykingb10-max/Adevos-Min-bot",
+  "logo": "https://files.catbox.moe/4ag7es.jpg",
+  "success_url": "/",
+  "scripts": {
+    "postdeploy": "echo Adevos Min-Bot deployed successfully"
+  },
+  "env": {
+    "BOT_TOKEN": {
+      "description": "Your Telegram bot token from @BotFather",
+      "required": true
+    },
+    "ADMIN_TOKEN": {
+      "description": "Admin panel password for your website",
+      "value": "adevos2025",
+      "required": true
+    },
+    "SESSION_LIMIT": {
+      "description": "Maximum WhatsApp sessions per server",
+      "value": "15",
+      "required": false
+    },
+    "NODE_ENV": {
+      "description": "Environment",
+      "value": "production",
+      "required": false
+    },
+    "TENOR_API_KEY": {
+      "description": "Tenor API key for GIF commands",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    },
+    "worker": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    {
+      "plan": "heroku-postgresql:essential-0"
+    }
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ]
+}
+
