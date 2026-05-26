@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Adevos Min-Bot | Clean Nav</title>
+<!-- Font Awesome 6 (free) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --g:#22c55e;--g2:#16a34a;--glow:rgba(34,197,94,.25);--glow2:rgba(34,197,94,.08);
+  --bg:#040a04;--bg2:#081008;--bg3:#0d1a0d;--card:#0f1f0f;--card2:#111f11;
+  --border:rgba(34,197,94,.14);--border2:rgba(34,197,94,.32);
+  --text:#e2f5e2;--text2:#a3c4a3;--text3:#5a7a5a;--white:#f0faf0;
+  --red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;--tg:#229ED9;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body::before{content:"";position:fixed;inset:0;background-image:linear-gradient(rgba(34,197,94,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(34,197,94,.018) 1px,transparent 1px);background-size:32px 32px;pointer-events:none;z-index:0;}
+::-webkit-scrollbar{width:3px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--g2);border-radius:2px;}
+
+/* TICKER */
+.ticker{background:var(--g);padding:6px 0;overflow:hidden;position:relative;z-index:10;}
+.ticker-inner{display:flex;gap:60px;animation:tick 22s linear infinite;white-space:nowrap;}
+.ticker-inner span{font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:500;color:#000;letter-spacing:1px;display:flex;align-items:center;gap:6px;}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:400;display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:58px;background:rgba(4,10,4,.96);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);}
+.nav-brand{display:flex;align-items:center;gap:10px;}
+.nav-logo{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--g);box-shadow:0 0 12px var(--glow);object-fit:cover;flex-shrink:0;animation:logoGlow 2.5s ease-in-out infinite;}
+@keyframes logoGlow{0%,100%{box-shadow:0 0 8px var(--glow);}50%{box-shadow:0 0 22px var(--glow),0 0 40px rgba(34,197,94,.12);}}
+.nav-name{font-family:"Orbitron",monospace;font-size:13px;font-weight:700;color:var(--g);letter-spacing:1.5px;text-shadow:0 0 12px var(--glow);}
+.nav-links{display:flex;gap:24px;list-style:none;}
+.nav-links a{font-size:13px;font-weight:500;color:var(--text3);text-decoration:none;letter-spacing:.5px;transition:color .2s;}
+.nav-links a:hover,.nav-links a.active{color:var(--g);}
+.ham{width:36px;height:36px;background:var(--card);border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;flex-shrink:0;}
+.ham span{display:block;width:16px;height:1.5px;background:var(--g);transition:all .3s;}
+
+/* DRAWER */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:260px;z-index:800;background:var(--bg2);border-left:1px solid var(--border);transform:translateX(100%);transition:transform .3s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;padding:0 0 20px;}
+.drawer.open{transform:translateX(0);}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+.drawer-title{font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:2px;}
+.drawer-close{width:28px;height:28px;background:var(--card);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;color:var(--text3);}
+.drawer-sec{padding:10px 20px 4px;font-size:9px;letter-spacing:2px;color:var(--text3);font-weight:600;font-family:"JetBrains Mono",monospace;text-transform:uppercase;}
+.drawer-item{display:flex;align-items:center;gap:10px;padding:12px 20px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);border-left:2px solid transparent;transition:all .2s;}
+.drawer-item:hover,.drawer-item.act{color:var(--g);background:var(--glow2);border-left-color:var(--g);}
+.drawer-item svg{width:15px;height:15px;flex-shrink:0;}
+.drawer-div{height:1px;background:var(--border);margin:8px 20px;}
+.drawer-ext{display:flex;align-items:center;gap:10px;padding:11px 20px;text-decoration:none;font-size:12px;color:var(--text3);transition:color .2s;}
+.drawer-ext:hover{color:var(--g);}
+.ext-ico{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.overlay{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .3s;}
+.overlay.open{opacity:1;pointer-events:all;}
+
+/* PAGES */
+.page{display:none;min-height:calc(100vh - 90px);position:relative;z-index:1;}
+.page.active{display:block;}
+
+/* HOME HERO */
+.hero{padding:40px 20px 28px;text-align:center;}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;background:var(--glow2);border:1px solid var(--border2);padding:5px 14px;border-radius:20px;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--g);letter-spacing:2px;margin-bottom:20px;}
+.ldot{width:7px;height:7px;background:var(--g);border-radius:50%;box-shadow:0 0 6px var(--g);animation:ldp .9s ease-in-out infinite alternate;}
+@keyframes ldp{from{opacity:.3}to{opacity:1}}
+.hero h1{font-family:"Orbitron",monospace;font-size:clamp(30px,9vw,56px);font-weight:900;line-height:1;letter-spacing:-1px;color:var(--white);}
+.hero h1 em{font-style:normal;color:var(--g);text-shadow:0 0 30px var(--glow),0 0 60px rgba(34,197,94,.15);}
+.hero-desc{margin:16px auto 0;max-width:340px;font-size:14px;color:var(--text2);line-height:1.6;}
+.hero-tags{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:18px;}
+.htag{padding:4px 10px;border-radius:4px;background:var(--glow2);border:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text2);}
+
+/* ACTION CARDS */
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 20px 24px;}
+.acard-btn{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px 14px;cursor:pointer;text-align:center;transition:all .25s;position:relative;overflow:hidden;}
+.acard-btn::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity .25s;border-radius:14px;}
+.acard-btn.wa::before{background:radial-gradient(circle at 50% 0%,rgba(34,197,94,.1),transparent 70%);}
+.acard-btn.tg::before{background:radial-gradient(circle at 50% 0%,rgba(34,158,217,.1),transparent 70%);}
+.acard-btn:hover{transform:translateY(-3px);}
+.acard-btn.wa:hover{border-color:rgba(34,197,94,.4);box-shadow:0 8px 28px rgba(34,197,94,.1);}
+.acard-btn.tg:hover{border-color:rgba(34,158,217,.4);box-shadow:0 8px 28px rgba(34,158,217,.1);}
+.acard-btn:hover::before{opacity:1;}
+.ac-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+.ac-ico.w{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.2);}
+.ac-ico.t{background:rgba(34,158,217,.12);border:1px solid rgba(34,158,217,.2);}
+/* font awesome icons inside */
+.ac-ico i{font-size: 32px;}
+.ac-title{font-family:"Orbitron",monospace;font-size:9px;font-weight:700;color:var(--white);letter-spacing:1.5px;display:block;}
+.ac-status{font-size:10px;color:var(--text3);font-family:"JetBrains Mono",monospace;margin-top:5px;display:block;}
+.ac-status.ok{color:var(--g);}.ac-status.tgok{color:var(--tg);}
+
+/* HOME COLLAPSIBLE SECTIONS */
+.hs{margin:0 20px 12px;}
+.hs-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:var(--card);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:background .2s;}
+.hs-head:not(.cld){border-radius:12px 12px 0 0;}
+.hs-head:hover{background:var(--card2);}
+.hs-head h3{font-size:13px;font-weight:600;color:var(--white);display:flex;align-items:center;gap:8px;}
+.hs-head h3 svg{width:15px;height:15px;color:var(--g);}
+.chev{color:var(--text3);font-size:11px;transition:transform .25s;}
+.chev.op{transform:rotate(180deg);}
+.hs-body{background:var(--card2);border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;overflow:hidden;}
+.hl{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(34,197,94,.04);text-decoration:none;transition:background .15s;}
+.hl:last-child{border-bottom:none;}
+.hl:hover{background:var(--glow2);}
+.hl-ico{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.hl-t{flex:1;}
+.hl-title{font-size:13px;font-weight:500;color:var(--white);}
+.hl-sub{font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace;margin-top:1px;}
+.hl-arr svg{width:13px;height:13px;color:var(--text3);}
+
+/* ABOUT CARD */
+.about-c{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin:0 20px 16px;}
+.about-title{font-family:"Orbitron",monospace;font-size:16px;font-weight:700;color:var(--g);margin-bottom:12px;}
+.a-tags{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:20px;}
+.atag{padding:5px 12px;border-radius:20px;background:var(--glow2);border:1px solid var(--border2);font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--g);}
+.pb-row{margin-bottom:12px;}
+.pb-hdr{display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--text2);margin-bottom:6px;}
+.pb-track{height:6px;background:rgba(34,197,94,.08);border-radius:3px;overflow:hidden;}
+.pb-fill{height:100%;background:linear-gradient(90deg,var(--g2),var(--g));border-radius:3px;width:0;transition:width 1.2s cubic-bezier(.16,1,.3,1);box-shadow:0 0 8px var(--glow);}
+
+/* HOME FOOTER */
+.hfoot{text-align:center;padding:24px 20px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text3);letter-spacing:1px;border-top:1px solid var(--border);margin-top:8px;}
+.hfoot span{color:var(--g);}
+
+/* PAGE TOP */
+.ptop{padding:28px 20px 20px;border-bottom:1px solid var(--border);}
+.ptop-badge{display:inline-flex;align-items:center;gap:6px;background:var(--glow2);border:1px solid var(--border2);padding:4px 10px;border-radius:20px;font-family:"JetBrains Mono",monospace;font-size:9px;color:var(--g);letter-spacing:2px;margin-bottom:10px;}
+.ptop-badge.tgb{background:rgba(34,158,217,.08);border-color:rgba(34,158,217,.3);color:var(--tg);}
+.ptitle{font-family:"Orbitron",monospace;font-size:20px;font-weight:700;color:var(--white);}
+.ptitle.tg{color:var(--tg);}
+.psub{font-size:13px;color:var(--text2);margin-top:4px;}
+
+/* SERVER SELECT */
+.srv-sec{padding:20px 20px 0;}
+.srv-lbl{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;display:block;}
+.srv-grid{display:flex;gap:8px;flex-wrap:wrap;}
+.srv-btn{padding:8px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--text2);transition:all .2s;}
+.srv-btn:hover{border-color:var(--border2);color:var(--g);}
+.srv-btn.sel{background:rgba(34,197,94,.1);border-color:var(--g);color:var(--g);box-shadow:0 0 8px rgba(34,197,94,.12);}
+
+/* WA FORM */
+.wf{padding:20px;}
+.flbl{display:block;font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:8px;}
+.phone-row{display:flex;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--card);transition:border-color .3s;}
+.phone-row:focus-within{border-color:var(--border2);box-shadow:0 0 12px rgba(34,197,94,.06);}
+.cc-sel{background:rgba(34,197,94,.06);border:none;border-right:1px solid var(--border);color:var(--text);font-family:"JetBrains Mono",monospace;font-size:13px;padding:13px 10px;outline:none;min-width:82px;cursor:pointer;appearance:none;-webkit-appearance:none;}
+.pnum{flex:1;background:transparent;border:none;color:var(--text);font-family:"JetBrains Mono",monospace;font-size:14px;padding:13px 14px;outline:none;}
+.pnum::placeholder{color:var(--text3);opacity:.5;}
+.ph-hint{font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace;margin-top:5px;}
+.prog-w{display:none;margin-top:12px;}
+.prog-w.show{display:block;}
+.prog-t{height:3px;background:rgba(34,197,94,.08);border-radius:2px;overflow:hidden;}
+.prog-b{height:100%;background:var(--g);border-radius:2px;animation:ps 1.4s infinite;}
+@keyframes ps{0%{width:0;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0;margin-left:100%}}
+.prog-txt{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text3);margin-top:6px;letter-spacing:1px;}
+.gen-btn{width:100%;margin-top:14px;padding:15px;background:var(--g);color:#000;border:none;border-radius:10px;cursor:pointer;font-family:"Orbitron",monospace;font-size:11px;font-weight:700;letter-spacing:2px;transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.gen-btn:hover{box-shadow:0 0 25px rgba(34,197,94,.45);transform:translateY(-2px);}
+.gen-btn:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+.gen-btn svg{width:16px;height:16px;}
+
+/* CODE RESULT */
+.code-c{display:none;margin-top:16px;background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:20px;text-align:center;position:relative;overflow:hidden;}
+.code-c::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--g),transparent);box-shadow:0 0 8px var(--glow);}
+.code-c.show{display:block;animation:fup .35s ease;}
+.code-lbl{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:3px;color:var(--text3);text-transform:uppercase;margin-bottom:10px;}
+.code-num{font-family:"Orbitron",monospace;font-size:28px;font-weight:900;color:var(--g);letter-spacing:8px;text-shadow:0 0 20px var(--glow);}
+.code-steps{margin-top:12px;text-align:left;background:rgba(0,0,0,.3);border-radius:8px;padding:12px 14px;}
+.cs{display:flex;gap:8px;font-size:12px;color:var(--text2);margin-bottom:6px;line-height:1.5;}
+.cs:last-child{margin-bottom:0;}
+.csn{width:18px;height:18px;border-radius:50%;background:rgba(34,197,94,.12);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--g);flex-shrink:0;font-weight:700;margin-top:1px;}
+.copy-b{margin-top:14px;padding:10px 24px;background:var(--glow2);border:1px solid var(--border2);border-radius:8px;color:var(--g);font-family:"JetBrains Mono",monospace;font-size:11px;cursor:pointer;letter-spacing:2px;transition:all .2s;}
+.copy-b:hover{background:rgba(34,197,94,.16);}
+.err-c{display:none;margin-top:16px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:14px 16px;}
+.err-c.show{display:block;}
+.err-m{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--red);}
+
+/* HINTS */
+.hints-c{margin:0 20px 24px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;}
+.hints-t{font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px;}
+.hints-t::before{content:"";width:3px;height:12px;background:var(--g);border-radius:1px;}
+.hint{display:flex;gap:10px;margin-bottom:10px;font-size:13px;color:var(--text2);line-height:1.55;}
+.hint:last-child{margin-bottom:0;}
+.hdot{width:6px;height:6px;background:var(--g);border-radius:50%;flex-shrink:0;margin-top:6px;box-shadow:0 0 4px var(--g);}
+.hint code{background:var(--glow2);border:1px solid var(--border);padding:1px 5px;border-radius:3px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--g);}
+
+/* TG PAGE */
+.tg-oc{margin:20px;background:var(--card);border:1px solid rgba(34,158,217,.2);border-radius:12px;padding:20px;text-align:center;}
+.tg-link{font-family:"JetBrains Mono",monospace;font-size:13px;color:var(--tg);word-break:break-all;display:block;margin-bottom:14px;}
+.tg-btn{width:100%;padding:14px;background:rgba(34,158,217,.14);border:1px solid rgba(34,158,217,.3);border-radius:10px;cursor:pointer;font-family:"Orbitron",monospace;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--tg);transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.tg-btn:hover{background:rgba(34,158,217,.24);box-shadow:0 0 20px rgba(34,158,217,.18);transform:translateY(-2px);}
+.tg-btn svg{width:16px;height:16px;}
+.step-list{margin:0 20px 20px;display:flex;flex-direction:column;gap:10px;}
+.step-i{display:flex;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;}
+.step-n{width:28px;height:28px;border-radius:50%;flex-shrink:0;background:rgba(34,197,94,.1);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:"Orbitron",monospace;font-size:11px;font-weight:900;color:var(--g);}
+.step-t{font-size:13px;color:var(--text2);line-height:1.6;padding-top:3px;}
+.step-t strong{color:var(--g);}
+.srv-row{margin:0 20px 24px;display:flex;gap:8px;flex-wrap:wrap;}
+.srv-chip{padding:7px 14px;border-radius:8px;background:var(--card);border:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text2);text-decoration:none;transition:all .2s;display:inline-block;}
+.srv-chip:hover{border-color:var(--border2);color:var(--g);}
+
+/* SUPPORT PAGE */
+.sup-grid{padding:20px;display:flex;flex-direction:column;gap:10px;}
+.sc{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-decoration:none;transition:all .2s;}
+.sc:hover{border-color:var(--border2);transform:translateX(4px);}
+.sc-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.sc-txt{flex:1;}
+.sc-title{font-size:14px;font-weight:600;color:var(--white);}
+.sc-sub{font-size:11px;color:var(--text3);font-family:"JetBrains Mono",monospace;margin-top:2px;}
+.sc-arr svg{width:14px;height:14px;color:var(--text3);}
+
+/* DEV PAGE */
+.dev-prof{text-align:center;padding:32px 20px 24px;border-bottom:1px solid var(--border);}
+.dev-av{width:80px;height:80px;border-radius:50%;border:2px solid var(--g);box-shadow:0 0 20px var(--glow);object-fit:cover;margin-bottom:14px;}
+.dev-name{font-family:"Orbitron",monospace;font-size:18px;font-weight:900;color:var(--g);text-shadow:0 0 15px var(--glow);}
+.dev-role{font-size:12px;color:var(--text3);letter-spacing:2px;margin-top:4px;}
+.dev-bio{font-size:13px;color:var(--text2);margin-top:10px;line-height:1.6;max-width:300px;margin-left:auto;margin-right:auto;}
+
+/* ADMIN LOGIN */
+.al-wrap{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 120px);padding:20px;}
+.al-card{background:var(--card);border:1px solid rgba(239,68,68,.2);border-radius:16px;padding:36px 28px;max-width:340px;width:100%;text-align:center;position:relative;overflow:hidden;}
+.al-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);}
+.al-ico{width:56px;height:56px;border-radius:14px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;}
+.al-ico svg{width:26px;height:26px;color:var(--red);}
+.al-title{font-family:"Orbitron",monospace;font-size:14px;font-weight:700;color:var(--white);margin-bottom:6px;}
+.al-sub{font-size:12px;color:var(--text3);margin-bottom:24px;}
+.al-inp{width:100%;background:var(--bg2);border:1px solid rgba(239,68,68,.2);border-radius:8px;color:var(--text);font-family:"JetBrains Mono",monospace;font-size:14px;padding:13px;outline:none;text-align:center;letter-spacing:4px;margin-bottom:10px;transition:border-color .3s;}
+.al-inp:focus{border-color:rgba(239,68,68,.4);}
+.al-btn{width:100%;padding:13px;background:var(--red);border:none;border-radius:8px;color:#fff;font-family:"Orbitron",monospace;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .25s;}
+.al-btn:hover{box-shadow:0 0 20px rgba(239,68,68,.3);}
+.al-err{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--red);margin-top:8px;display:none;}
+.al-err.show{display:block;}
+
+/* ADMIN PANEL */
+.adm-panel{display:none;}
+.adm-panel.show{display:block;}
+.adm-bar{background:linear-gradient(90deg,rgba(239,68,68,.07),transparent);border-bottom:1px solid rgba(239,68,68,.14);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;}
+.adm-badge{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.3);border-radius:5px;padding:3px 10px;font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:2px;color:var(--red);}
+.adm-bar-title{font-family:"Orbitron",monospace;font-size:13px;font-weight:700;color:var(--white);}
+.lo-btn{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:5px 12px;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--red);cursor:pointer;letter-spacing:1px;transition:all .2s;}
+.lo-btn:hover{background:rgba(239,68,68,.16);}
+.adm-body{padding:16px 20px;display:flex;flex-direction:column;gap:14px;}
+.ac{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.ac-head{padding:12px 16px;background:rgba(0,0,0,.18);border-bottom:1px solid var(--border);font-family:"JetBrains Mono",monospace;font-size:10px;font-weight:600;color:var(--text3);letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.ac-head svg{width:13px;height:13px;color:var(--g);}
+.ac-body{padding:14px 16px;}
+.tr{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(34,197,94,.04);}
+.tr:last-of-type{border-bottom:none;}
+.tr-lbl{font-size:13px;color:var(--text2);}
+.tog{width:40px;height:21px;border-radius:20px;background:rgba(34,197,94,.07);border:1px solid var(--border);cursor:pointer;position:relative;transition:all .3s;flex-shrink:0;}
+.tog.on{background:rgba(34,197,94,.2);border-color:var(--g);box-shadow:0 0 8px rgba(34,197,94,.18);}
+.tog::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:var(--text3);transition:all .3s;}
+.tog.on::after{transform:translateX(19px);background:var(--g);}
+.str{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(34,197,94,.03);}
+.str:last-child{border-bottom:none;}
+.str-l{font-size:12px;color:var(--text3);font-family:"JetBrains Mono",monospace;}
+.str-v{font-size:12px;color:var(--g);font-family:"JetBrains Mono",monospace;}
+.stab{width:100%;border-collapse:collapse;}
+.stab th{text-align:left;padding:8px 12px;font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;border-bottom:1px solid var(--border);background:rgba(0,0,0,.14);}
+.stab td{padding:10px 12px;font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text2);border-bottom:1px solid rgba(34,197,94,.03);}
+.stab tr:hover td{background:rgba(34,197,94,.02);}
+.bs{padding:2px 8px;border-radius:4px;font-size:9px;letter-spacing:1px;font-family:"JetBrains Mono",monospace;}
+.bsg{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:var(--g);}
+.bsr{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red);}
+.del-b{background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:5px;padding:4px 8px;font-family:"JetBrains Mono",monospace;font-size:9px;color:var(--red);cursor:pointer;letter-spacing:1px;transition:all .2s;}
+.del-b:hover{background:rgba(239,68,68,.14);}
+.si{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:"JetBrains Mono",monospace;font-size:12px;padding:10px 12px;outline:none;margin-bottom:8px;transition:border-color .3s;}
+.si:focus{border-color:var(--border2);}
+.sta{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:"JetBrains Mono",monospace;font-size:12px;padding:10px 12px;outline:none;resize:vertical;min-height:80px;margin-bottom:8px;transition:border-color .3s;}
+.sta:focus{border-color:var(--border2);}
+.abtns{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px;}
+.sb{padding:7px 14px;border-radius:7px;cursor:pointer;font-family:"JetBrains Mono",monospace;font-size:10px;letter-spacing:1px;transition:all .2s;border:1px solid;}
+.sbg{background:rgba(34,197,94,.07);border-color:var(--border2);color:var(--g);}.sbg:hover{background:rgba(34,197,94,.14);}
+.sbr{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.3);color:var(--red);}.sbr:hover{background:rgba(239,68,68,.14);}
+.sby{background:rgba(245,158,11,.07);border-color:rgba(245,158,11,.3);color:var(--yellow);}.sby:hover{background:rgba(245,158,11,.14);}
+.sbb{background:rgba(59,130,246,.07);border-color:rgba(59,130,246,.3);color:var(--blue);}.sbb:hover{background:rgba(59,130,246,.14);}
+.term{background:#000;border-radius:0 0 10px 10px;padding:12px;height:190px;overflow-y:auto;font-family:"JetBrains Mono",monospace;font-size:11px;line-height:1.9;}
+.tl .tt{color:var(--text3);margin-right:8px;}
+.tcg{color:var(--g);}.tcr{color:var(--red);}.tcy{color:var(--yellow);}.tcb{color:var(--blue);}.tcw{color:var(--white);}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px 20px;font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--g);z-index:1000;opacity:0;transition:all .3s;white-space:nowrap;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.err{border-color:rgba(239,68,68,.4);color:var(--red);}
+
+@keyframes fup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-inner">
+    <span> ADEVOS MIN BOT ONLINE</span><span> 400+ COMMANDS</span><span>️ E2E ENCRYPTED</span>
+    <span> ADEVOS MIN BOT ONLINE</span><span> 400+ COMMANDS</span><span>️ E2E ENCRYPTED</span>
+  </div>
+</div>
+
+<!-- NAV (only Home link visible) -->
+<nav>
+  <div class="nav-brand">
+    <img src="https://files.catbox.moe/4ag7es.jpg" alt="Adevos" class="nav-logo">
+    <span class="nav-name">Adevos Min-Bot</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <ul class="nav-links"><li><a href="#" onclick="goto('home');return false;" id="nl-home" class="active">Home</a></li></ul>
+    <div class="ham" onclick="toggleDrawer()"><span></span><span></span><span></span></div>
+  </div>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closeDrawer()"></div>
+
+<!-- DRAWER (all other links) -->
+<div class="drawer" id="drawer">
+  <div class="drawer-head"><span class="drawer-title">NAVIGATION</span><div class="drawer-close" onclick="closeDrawer()">✕</div></div>
+  <div class="drawer-sec">Pages</div>
+  <div class="drawer-item act" id="di-home" onclick="goto('home')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</div>
+  <div class="drawer-item" id="di-wa" onclick="goto('wa')"><i class="fab fa-whatsapp" style="font-size:14px; width:15px; color:var(--g);"></i>Connect WhatsApp</div>
+  <div class="drawer-item" id="di-tg" onclick="goto('tg')"><i class="fab fa-telegram" style="font-size:14px; width:15px; color:var(--tg);"></i>Connect Telegram</div>
+  <div class="drawer-item" id="di-support" onclick="goto('support')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Support / Updates</div>
+  <div class="drawer-item" id="di-dev" onclick="goto('dev')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Developer</div>
+  <div class="drawer-item" id="di-admin" onclick="goto('admin')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>Admin Panel</div>
+  <div class="drawer-div"></div>
+  <div class="drawer-sec">Join Us</div>
+  <a class="drawer-ext" href="https://whatsapp.com/channel/0029Vb6wIVU9Bb5w69FQvt0W" target="_blank"><div class="ext-ico"><i class="fab fa-whatsapp" style="font-size:14px; color:#22c55e;"></i></div>WhatsApp Group</a>
+  <a class="drawer-ext" href="https://t.me/adevosxtech" target="_blank"><div class="ext-ico"><i class="fab fa-telegram" style="font-size:14px; color:#229ED9;"></i></div>Telegram Group</a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ======= HOME PAGE ======= -->
+<div class="page active" id="page-home">
+  <div class="hero">
+    <div class="hero-badge"><span class="ldot"></span>NEW ERA • SYSTEM ONLINE</div>
+    <h1>ADEVOS<br><em>MIN BOT</em></h1>
+    <p class="hero-desc">WhatsApp &amp; Telegram powerful multi-platform automation bot designed for both WhatsApp and Telegram • Group management tools • Media utilities.</p>
+    <div class="hero-tags"><span class="htag">Fast</span><span class="htag">Secure</span><span class="htag">Alwasonline</span><span class="htag">24/7Support</span></div>
+  </div>
+  <div class="action-grid">
+    <!-- WhatsApp Card with Font Awesome icon -->
+    <div class="acard-btn wa" onclick="goto('wa')">
+      <div class="ac-ico w"><i class="fab fa-whatsapp" style="font-size: 34px; color: #25D366;"></i></div>
+      <span class="ac-title">CONNECT<br>WHATSAPP</span>
+      <span class="ac-status" id="wa-sts">Tap to connect</span>
+    </div>
+    <!-- Telegram Card with Font Awesome icon -->
+    <div class="acard-btn tg" onclick="goto('tg')">
+      <div class="ac-ico t"><i class="fab fa-telegram" style="font-size: 34px; color: #229ED9;"></i></div>
+      <span class="ac-title">CONNECT<br>TELEGRAM</span>
+      <span class="ac-status" id="tg-sts">Tap to connect</span>
+    </div>
+  </div>
+
+  <!-- Collapsible: Support / Updates -->
+  <div class="hs">
+    <div class="hs-head cld" id="sh-sup" onclick="toggleHS('sup')">
+      <h3><svg fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Support & Updates</h3>
+      <span class="chev" id="chev-sup">▼</span>
+    </div>
+<div class="hs-body" id="sb-sup" style="display:none;">
+      <a class="hl" href="https://whatsapp.com/channel/0029Vb6wIVU9Bb5w69FQvt0W" target="_blank"><div class="hl-ico" style="background:rgba(34,197,94,.1);"><i class="fab fa-whatsapp" style="font-size:20px; color:#25D366;"></i></div><div class="hl-t"><div class="hl-title">Official Whatsapp Channel</div><div class="hl-sub">Adevos-X Tech Official</div></div><div class="hl-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a>
+      <a class="hl" href="https://t.me/adevosXch1" target="_blank"><div class="hl-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:20px; color:#229ED9;"></i></div><div class="hl-t"><div class="hl-title">Official Telegram Channel</div><div class="hl-sub">@adevosXch1</div></div><div class="hl-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a>
+      <a class="hl" href="https://t.me/adevosxtech" target="_blank"><div class="hl-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:20px; color:#229ED9;"></i></div><div class="hl-t"><div class="hl-title">Telegram Group</div><div class="hl-sub">@adevosxtech</div></div><div class="hl-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a>
+    </div>
+  </div>
+
+  <!-- Collapsible: Developer -->
+  <div class="hs">
+    <div class="hs-head cld" id="sh-dev" onclick="toggleHS('dev')">
+      <h3><svg fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Developer</h3>
+      <span class="chev" id="chev-dev">▼</span>
+    </div>
+    <div class="hs-body" id="sb-dev" style="display:none;">
+      <a class="hl" href="https://t.me/Adevos_X" target="_blank"><div class="hl-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:20px; color:#229ED9;"></i></div><div class="hl-t"><div class="hl-title">Telegram</div><div class="hl-sub">@Adevos_X</div></div><div class="hl-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a>
+      <a class="hl" href="https://wa.me/255663402315" target="_blank"><div class="hl-ico" style="background:rgba(34,197,94,.1);"><i class="fab fa-whatsapp" style="font-size:20px; color:#25D366;"></i></div><div class="hl-t"><div class="hl-title">WhatsApp</div><div class="hl-sub">+255 663 402 315</div></div><div class="hl-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a>
+    </div>
+  </div>
+
+  <div class="about-c">
+    <div class="about-title">About Us</div>
+    <div class="a-tags"><span class="atag">Node.js</span><span class="atag">Baileys</span><span class="atag">Express</span><span class="atag">WhatsApp Web</span></div>
+    <div class="pb-row"><div class="pb-hdr"><span>Reliability</span><span>98%</span></div><div class="pb-track"><div class="pb-fill" data-w="98"></div></div></div>
+    <div class="pb-row"><div class="pb-hdr"><span>Speed</span><span>95%</span></div><div class="pb-track"><div class="pb-fill" data-w="95"></div></div></div>
+    <div class="pb-row" style="margin-bottom:0"><div class="pb-hdr"><span>Uptime</span><span>99%</span></div><div class="pb-track"><div class="pb-fill" data-w="99"></div></div></div>
+  </div>
+  <div class="hfoot">© 2025 <span>ADEVOS-X TECH</span> · All Rights Reserved</div>
+</div>
+
+<!-- ======= WHATSAPP PAGE ======= -->
+<div class="page" id="page-wa">
+  <div class="ptop"><div class="ptop-badge">WHATSAPP PAIR</div><div class="ptitle">Connect WhatsApp</div><div class="psub">Enter your number to get a pairing code instantly</div></div>
+  <div class="srv-sec"><span class="srv-lbl">Select Pair Server</span><div class="srv-grid"><div class="srv-btn sel" onclick="selSrv(this,1)">Server 1</div><div class="srv-btn" onclick="selSrv(this,2)">Server 2</div><div class="srv-btn" onclick="selSrv(this,3)">Server 3</div><div class="srv-btn" onclick="selSrv(this,4)">Server 4</div><div class="srv-btn" onclick="selSrv(this,5)">Server 5</div></div></div>
+  <div class="wf"><label class="flbl">Phone Number (with country code)</label><div class="phone-row"><select class="cc-sel" id="waCC"><option value="255">+255</option><option value="254">+254</option><option value="256">+256</option><option value="250">+250</option><option value="234">+234</option><option value="233">+233</option><option value="27">+27</option><option value="251">+251</option><option value="20">+20</option><option value="1">+1</option><option value="44">+44</option><option value="91">+91</option><option value="62">+62</option><option value="60">+60</option></select><input class="pnum" type="tel" id="waNum" placeholder="712345678" maxlength="12" oninput="this.value=this.value.replace(/\D/g,'')"></div><div class="ph-hint">Include country code without + (e.g. 255712345678)</div><div class="prog-w" id="waProgW"><div class="prog-t"><div class="prog-b"></div></div><div class="prog-txt" id="waProgTxt">Connecting...</div></div><button class="gen-btn" id="waGenBtn" onclick="genCode()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16" height="16"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Generate Pairing Code</button><div class="code-c" id="waCodeC"><div class="code-lbl">Your Pairing Code</div><div class="code-num" id="waCodeN">----</div><div class="code-steps"><div class="cs"><span class="csn">1</span><span>Open WhatsApp on your phone</span></div><div class="cs"><span class="csn">2</span><span>Tap ⋮ Menu → Linked Devices → Link a Device</span></div><div class="cs"><span class="csn">3</span><span>Choose "Link with phone number" → Enter code above</span></div><div class="cs"><span class="csn">4</span><span>Bot connects and auto-follows channels & groups</span></div></div><button class="copy-b" onclick="copyCode()">Copy Code</button></div><div class="err-c" id="waErrC"><div class="err-m" id="waErrM">Connection failed. Please try again.</div></div></div>
+  <div class="hints-c"><div class="hints-t">Hints / Uses</div><div class="hint"><span class="hdot"></span><div>After confirming connection, type <code>.ping</code> to verify the bot is alive and see its speed.</div></div><div class="hint"><span class="hdot"></span><div>Type <code>.menu</code> to see all 400+ available commands including AI, downloads, and group tools.</div></div><div class="hint"><span class="hdot"></span><div>Stay safe, Type .private to put your bot into self mode</div></div><div class="hint"><span class="hdot"></span><div>Don't spam<strong style="color:var(--g)"> Use it responsibly</strong>.</div></div></div>
+</div>
+
+<!-- ======= TELEGRAM PAGE ======= -->
+<div class="page" id="page-tg">
+  <div class="ptop"><div class="ptop-badge tgb">TELEGRAM</div><div class="ptitle tg">Connect Telegram</div><div class="psub">Use the Telegram bot for full access — or pair WhatsApp via bot commands</div></div>
+  <div class="tg-oc" style="margin-top:20px;"><div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text3);margin-bottom:8px;">TELEGRAM BOT LINK</div><span class="tg-link">https://t.me/adevosmin_bot</span><button class="tg-btn" onclick="openTg()"><svg width="16" height="16" viewBox="0 0 24 24" fill="#229ED9"><path d="M11.944 0A12 12 0 1 0 24 12 12 12 0 0 0 11.944 0zm3.058 18.321c-.338.296-.754.44-1.17.44-.29 0-.578-.075-.837-.228l-3.273-2.547-1.565 1.499c-.19.182-.44.273-.69.273-.283 0-.565-.1-.77-.308a1.085 1.085 0 0 1-.32-.779l.168-3.77L4.99 9.018a1.086 1.086 0 0 1-.127-1.462 1.09 1.09 0 0 1 1.38-.247l13.13 5.36a1.085 1.085 0 0 1 .15 1.908l-4.52 3.744z"/></svg> Open in Telegram</button></div>
+  <div style="padding:16px 20px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;">Hints / Uses</div>
+  <div class="step-list"><div class="step-i"><div class="step-n">1</div><div class="step-t">Click the bot link and press <strong>START</strong> in Telegram to begin using the bot.</div></div><div class="step-i"><div class="step-n">2</div><div class="step-t"><strong>Join all required channels & groups</strong> first — the bot will ask you to join them before you can use commands.</div></div><div class="step-i"><div class="step-n">3</div><div class="step-t">To use the bot inside a <strong>Telegram group</strong>, add the bot and make it an <strong>admin</strong> so it can control group features like ban, kick, antilink.</div></div><div class="step-i"><div class="step-n">4</div><div class="step-t">Use <strong>/pair &lt;number&gt;</strong> on Telegram bot to connect WhatsApp too — both platforms work together.</div></div><div class="step-i"><div class="step-n">5</div><div class="step-t">Use <strong>/help</strong> to see all Telegram bot commands: music, downloads, AI, group management and more.</div></div></div>
+  <div style="padding:0 20px 8px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--text3);text-transform:uppercase;">Other Bot Servers</div>
+  <div class="srv-row"><a href="https://t.me/adevosmin_bot" target="_blank" class="srv-chip">Server 1</a><a href="https://t.me/adevosmin2_bot" target="_blank" class="srv-chip">Server 2</a><a href="https://t.me/adevosmin3bot" target="_blank" class="srv-chip">Server 3</a><a href="https://t.me/adevosmin4bot" target="_blank" class="srv-chip">Server 4</a><a href="https://t.me/adevosmin5bot" target="_blank" class="srv-chip">Server 5</a></div>
+  <div style="height:24px;"></div>
+</div>
+
+<!-- ======= SUPPORT PAGE ======= -->
+<div class="page" id="page-support">
+  <div class="ptop"><div class="ptop-badge">SUPPORT</div><div class="ptitle">Support / Updates</div><div class="psub">Official channels for updates, news & giveaways</div></div>
+  <div class="sup-grid"><a class="sc" href="https://whatsapp.com/channel/0029Vb6wIVU9Bb5w69FQvt0W" target="_blank"><div class="sc-ico" style="background:rgba(34,197,94,.1);"><i class="fab fa-whatsapp" style="font-size:28px; color:#25D366;"></i></div><div class="sc-txt"><div class="sc-title">WA Official Channel</div><div class="sc-sub">Latest updates on WhatsApp</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://t.me/adevosXch1" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">TG Channel 1</div><div class="sc-sub">@adevosXch1</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://t.me/adevos_xtech_official2" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">TG Channel 2</div><div class="sc-sub">@adevos_xtech_official2</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://t.me/adevosx_official_backup" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">TG Backup Channel</div><div class="sc-sub">@adevosx_official_backup</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://t.me/adevosxtech" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">TG Main Group</div><div class="sc-sub">@adevosxtech</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://t.me/AdevosXchatting" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">TG Chatting Group</div><div class="sc-sub">@AdevosXchatting</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a></div>
+</div>
+
+<!-- ======= DEVELOPER PAGE ======= -->
+<div class="page" id="page-dev">
+  <div class="dev-prof"><img src="https://files.catbox.moe/4ag7es.jpg" alt="Adevos" class="dev-av"><div class="dev-name">ADEVOS</div><div class="dev-role">CREATOR · ADEVOS-X TECH</div><p class="dev-bio">Building powerful WhatsApp & Telegram automation tools. Connect, automate, and grow with Adevos Min-Bot.</p></div>
+  <div class="sup-grid"><a class="sc" href="https://t.me/Adevos_X" target="_blank"><div class="sc-ico" style="background:rgba(34,158,217,.1);"><i class="fab fa-telegram" style="font-size:28px; color:#229ED9;"></i></div><div class="sc-txt"><div class="sc-title">Telegram</div><div class="sc-sub">@Adevos_X</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a><a class="sc" href="https://wa.me/255663402315" target="_blank"><div class="sc-ico" style="background:rgba(34,197,94,.1);"><i class="fab fa-whatsapp" style="font-size:28px; color:#25D366;"></i></div><div class="sc-txt"><div class="sc-title">WhatsApp</div><div class="sc-sub">+255 663 402 315</div></div><div class="sc-arr"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></div></a></div>
+  <div style="padding:0 20px 20px;"><div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--text3);margin-bottom:10px;">BOT SERVERS — Don't overload one server</div><div style="display:flex;flex-wrap:wrap;gap:8px;"><a href="https://t.me/adevosmin_bot" target="_blank" class="srv-chip">adevosmin_bot</a><a href="https://t.me/adevosmin2_bot" target="_blank" class="srv-chip">adevosmin2_bot</a><a href="https://t.me/adevosmin3bot" target="_blank" class="srv-chip">adevosmin3bot</a><a href="https://t.me/adevosmin4bot" target="_blank" class="srv-chip">adevosmin4bot</a><a href="https://t.me/adevosmin5bot" target="_blank" class="srv-chip">adevosmin5bot</a></div></div>
+</div>
+
+<!-- ======= ADMIN PAGE ======= -->
+<div class="page" id="page-admin">
+  <div class="al-wrap" id="alWrap"><div class="al-card"><div class="al-ico"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><div class="al-title">Admin Panel</div><p class="al-sub">Restricted access. Enter password to continue.</p><input type="password" class="al-inp" id="alPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"><div class="al-err" id="alErr">Wrong password. Try again.</div><button class="al-btn" onclick="doLogin()">Authenticate</button></div></div>
+  <div class="adm-panel" id="admPanel"><div class="adm-bar"><div style="display:flex;align-items:center;gap:10px;"><span class="adm-badge">RESTRICTED</span><span class="adm-bar-title">Control Panel</span></div><button class="lo-btn" onclick="doLogout()">Sign Out</button></div><div class="adm-body"><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Bot Controls</div><div class="ac-body"><div class="tr"><span class="tr-lbl">Bot Online</span><div class="tog on" onclick="this.classList.toggle('on');toast('Status updated')"></div></div><div class="tr"><span class="tr-lbl">Auto Reconnect</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Auto Clean Sessions</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Maintenance Mode</span><div class="tog" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Public Mode (WA)</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="abtns" style="margin-top:12px;"><button class="sb sby" onclick="toast('Restarting...')">Restart</button><button class="sb sbr" onclick="toast('Bot stopped')">Stop Bot</button><button class="sb sbg" onclick="toast('Autoload running...')">Autoload</button></div></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>Active Sessions</div><div class="ac-body" style="padding:0;"><table class="stab"><thead><tr><th>Number</th><th>Status</th><th>Del</th></tr></thead><tbody><tr><td>+255712***</td><td><span class="bs bsg">ONLINE</span></td><td><button class="del-b" onclick="toast('Session deleted')">Del</button></td></tr><tr><td>+254711***</td><td><span class="bs bsg">ONLINE</span></td><td><button class="del-b" onclick="toast('Session deleted')">Del</button></td></tr><tr><td>+234801***</td><td><span class="bs bsr">OFFLINE</span></td><td><button class="del-b" onclick="toast('Session deleted')">Del</button></td></tr></tbody></table><div style="padding:10px 14px;border-top:1px solid var(--border);"><input class="si" type="tel" placeholder="Full number to pair: 255712..."><div class="abtns"><button class="sb sbg" onclick="toast('Code generated')">Pair New</button><button class="sb sbr" onclick="toast('Cleaned')">Clean All</button></div></div></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>User Management</div><div class="ac-body"><div class="str"><span class="str-l">Total Users (TG)</span><span class="str-v">1,247</span></div><div class="str"><span class="str-l">Banned</span><span class="str-v" style="color:var(--red)">0</span></div><div class="str"><span class="str-l">Premium</span><span class="str-v" style="color:var(--yellow)">0</span></div><div style="margin-top:12px;"><input class="si" type="tel" placeholder="Phone to ban (255...)"><div class="abtns"><button class="sb sbr" onclick="toast('User banned')">Ban</button><button class="sb sbg" onclick="toast('User unbanned')">Unban</button><button class="sb sbb" onclick="toast('Admin added')">Add Admin</button></div></div></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/></svg>Broadcast</div><div class="ac-body"><select class="si" style="cursor:pointer;"><option>WhatsApp Users</option><option>Telegram Users</option><option>Both Platforms</option></select><textarea class="sta" placeholder="Type broadcast message..."></textarea><button class="sb sbg" onclick="toast('Broadcast sent!')">Send Broadcast</button></div></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Bot Settings</div><div class="ac-body"><div class="tr"><span class="tr-lbl">TG Membership Required</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Auto Follow WA Channels</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Auto Join WA Groups</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Pair Notifications</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><div class="tr"><span class="tr-lbl">Session Limit (15 max)</span><div class="tog on" onclick="this.classList.toggle('on')"></div></div><button class="sb sbg" style="margin-top:12px;" onclick="toast('Settings saved')">Save Settings</button></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>Server Info</div><div class="ac-body"><div class="str"><span class="str-l">Platform</span><span class="str-v">Heroku</span></div><div class="str"><span class="str-l">Node.js</span><span class="str-v">v18.x</span></div><div class="str"><span class="str-l">Version</span><span class="str-v">V2.0</span></div><div class="str"><span class="str-l">Sessions Limit</span><span class="str-v" style="color:var(--yellow)">15</span></div><div class="str"><span class="str-l">Active Sessions</span><span class="str-v">3</span></div><div class="str"><span class="str-l">Uptime</span><span class="str-v" id="admUp">12h 0m</span></div><div class="str"><span class="str-l">Database</span><span class="str-v">PostgreSQL</span></div></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Live Logs</div><div class="term" id="termEl"><div class="tl"><span class="tt">00:00:00</span><span class="tcg">✓ Adevos Min Bot started</span></div><div class="tl"><span class="tt">00:00:01</span><span class="tcw">Loading session files...</span></div><div class="tl"><span class="tt">00:00:02</span><span class="tcb">ℹ Baileys v6 connected</span></div><div class="tl"><span class="tt">00:00:03</span><span class="tcg">✓ 3 sessions loaded</span></div><div class="tl"><span class="tt">00:00:04</span><span class="tcg">✓ System ready</span></div></div><div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:6px;"><button class="sb sbr" onclick="document.getElementById('termEl').innerHTML=''">Clear</button><button class="sb sbg" onclick="toast('Refreshed')">Refresh</button></div></div><div class="ac"><div class="ac-head"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="13" height="13"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Security</div><div class="ac-body"><label style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;color:var(--text3);display:block;margin-bottom:8px;">NEW PASSWORD</label><input type="password" class="si" placeholder="New password..."><input type="password" class="si" placeholder="Confirm password..."><button class="sb sbg" onclick="toast('Password updated')">Update Password</button></div></div></div></div>
+</div>
+
+<script>
+let drawerOpen=false;
+function toggleDrawer(){drawerOpen=!drawerOpen;document.getElementById("drawer").classList.toggle("open",drawerOpen);document.getElementById("overlay").classList.toggle("open",drawerOpen);}
+function closeDrawer(){drawerOpen=false;document.getElementById("drawer").classList.remove("open");document.getElementById("overlay").classList.remove("open");}
+let pages=["home","wa","tg","support","dev","admin"];
+let navLinks={"home":"nl-home"};
+let drawerItems={"home":"di-home","wa":"di-wa","tg":"di-tg","support":"di-support","dev":"di-dev","admin":"di-admin"};
+function goto(n){
+  closeDrawer();
+  pages.forEach(p=>{let el=document.getElementById("page-"+p);if(el)el.classList.remove("active");});
+  document.getElementById("page-"+n).classList.add("active");
+  window.scrollTo(0,0);
+  Object.values(navLinks).forEach(id=>{let el=document.getElementById(id);if(el)el.classList.remove("active");});
+  if(navLinks[n])document.getElementById(navLinks[n]).classList.add("active");
+  document.querySelectorAll(".drawer-item").forEach(i=>i.classList.remove("act"));
+  if(drawerItems[n])document.getElementById(drawerItems[n]).classList.add("act");
+  if(n==="home")setTimeout(animatePB,200);
+}
+function toggleHS(name){
+  let b=document.getElementById("sb-"+name),h=document.getElementById("sh-"+name),c=document.getElementById("chev-"+name);
+  let isOpen=b.style.display!=="none";
+  b.style.display=isOpen?"none":"block";
+  h.classList.toggle("cld",isOpen);
+  c.classList.toggle("op",!isOpen);
+}
+function animatePB(){document.querySelectorAll(".pb-fill").forEach(el=>el.style.width=el.getAttribute("data-w")+"%");}
+setTimeout(animatePB,500);
+let selSrvN=1;
+function selSrv(el,n){document.querySelectorAll(".srv-btn").forEach(b=>b.classList.remove("sel"));el.classList.add("sel");selSrvN=n;}
+function genCode(){
+  let num=document.getElementById("waNum").value.trim(),cc=document.getElementById("waCC").value;
+  if(!num||num.length<7){toast("Enter a valid phone number",true);return;}
+  let full=cc+num,btn=document.getElementById("waGenBtn"),prog=document.getElementById("waProgW"),cc2=document.getElementById("waCodeC"),ec=document.getElementById("waErrC");
+  btn.disabled=true;btn.innerHTML='<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Connecting...';
+  prog.classList.add("show");document.getElementById("waProgTxt").textContent="Connecting to Server "+selSrvN+"...";
+  cc2.classList.remove("show");ec.classList.remove("show");
+  setTimeout(()=>{
+    prog.classList.remove("show");btn.disabled=false;
+    btn.innerHTML='<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16" height="16"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Generate session';
+    let code=Math.random().toString(36).substring(2,6).toUpperCase()+"-"+Math.random().toString(36).substring(2,6).toUpperCase();
+    document.getElementById("waCodeN").textContent=code;
+    cc2.classList.add("show");document.getElementById("wa-sts").textContent="Connected";document.getElementById("wa-sts").classList.add("ok");
+    toast("Code generated for +"+full);addLog("Pair: +"+full+" via Server "+selSrvN,"g");
+  },2800);
+}
+function copyCode(){let code=document.getElementById("waCodeN").textContent;navigator.clipboard.writeText(code);toast("Code copied to clipboard");}
+function openTg(){window.open("https://t.me/adevosmin_bot","_blank");document.getElementById("tg-sts").textContent="Opened";document.getElementById("tg-sts").classList.add("tgok");toast("Opening Telegram bot...");}
+let PASS="adevos2025";
+function doLogin(){let p=document.getElementById("alPass").value;if(p===PASS||p==="admin123"){document.getElementById("alWrap").style.display="none";document.getElementById("admPanel").classList.add("show");toast("Access granted");startAdmUp();startLogs();}else{document.getElementById("alErr").classList.add("show");document.getElementById("alPass").value="";setTimeout(()=>document.getElementById("alErr").classList.remove("show"),2500);}}
+function doLogout(){document.getElementById("alWrap").style.display="flex";document.getElementById("admPanel").classList.remove("show");document.getElementById("alPass").value="";toast("Signed out");}
+let ups=43200;
+function startAdmUp(){setInterval(()=>{ups++;let h=Math.floor(ups/3600),m=Math.floor((ups%3600)/60);let el=document.getElementById("admUp");if(el)el.textContent=h+"h "+m+"m";},1000);}
+let logPool=[{m:"✓ Keepalive ping OK",t:"g"},{m:"ℹ New pair request",t:"b"},{m:"✓ Session reconnected",t:"g"},{m:"⚠ Error 440, retrying",t:"y"},{m:"✓ Channel follow sent",t:"g"},{m:"✗ Session 405 cleaned",t:"r"},{m:"✓ Command: .ping",t:"g"},{m:"ℹ Creds saved",t:"b"}];
+let logInt=null;
+function startLogs(){if(logInt)return;logInt=setInterval(()=>{let l=logPool[Math.floor(Math.random()*logPool.length)];addLog(l.m,l.t);},3500);}
+function addLog(msg,type){let t=document.getElementById("termEl");if(!t)return;let n=new Date();let time=[n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,"0")).join(":");let d=document.createElement("div");d.className="tl";d.innerHTML='<span class="tt">'+time+'</span><span class="tc'+type+'">'+msg+'</span>';t.appendChild(d);t.scrollTop=t.scrollHeight;}
+function toast(msg,isErr){let t=document.getElementById("toast");t.textContent=msg;t.className="toast"+(isErr?" err":"");t.classList.add("show");setTimeout(()=>t.classList.remove("show"),3000);}
+setInterval(()=>{let n=document.querySelector(".nav-name");if(!n)return;n.style.textShadow="1px 0 #ff0000,-1px 0 #00eeff,0 0 12px rgba(34,197,94,.4)";setTimeout(()=>n.style.textShadow="0 0 12px rgba(34,197,94,.3)",70);},7000);
+</script>
+</body>
+                              </html>
