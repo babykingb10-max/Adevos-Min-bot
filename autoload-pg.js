@@ -1,5 +1,6 @@
 require('dotenv').config();
 const chalk = require('chalk');
+const database = require('./database'); // Tumeimport database yote hapa kuzuia makosa ya ReferenceError
 const {
   initDB, loadAllSessions, updateSessionStatus,
   usePostgresAuthState, cleanInvalidSessions,
@@ -68,7 +69,7 @@ async function connectSession(sessionRow) {
           DisconnectReason.restartRequired,
         ].includes(reason)) {
           await sleep(RECONNECT_DELAY);
-          await updateSessionStatus(jid, 'pending');
+          await updateSessionStatus(jid, 'pending'); // Imesahihishwa hapa (tumeondoa database.)
           connectSession(sessionRow);
         } else {
           await updateSessionStatus(jid, 'disconnected');
@@ -138,4 +139,3 @@ function getActiveConnections() { return activeConnections; }
 function getSession(jid) { return activeConnections.get(jid) || null; }
 
 module.exports = { autoLoadPairs, connectSession, getActiveConnections, getSession };
-
