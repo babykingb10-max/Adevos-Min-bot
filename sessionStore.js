@@ -1,0 +1,351 @@
+/**
+ * sessionStore.js - MongoDB Session Store
+ * Adevos Min-Bot
+ *
+ * Replaces useMultiFileAuthState() from Baileys with a MongoDB-backed
+ * equivalent. All WhatsApp session data (creds + signal keys) is stored
+ * in the sessions collection instead of disk files.
+ *
+ * Also handles pairing code persistence and retrieval.
+ */
+
+'use strict';
+
+const chalk = require('chalk');
+const { Session } = require('./db');
+
+// ─── RAM Cache ────────────────────────────────────────────────
+// Short-lived cache to reduce MongoDB reads for hot sessions.
+// Each entry expires after CACHE_TTL_MS milliseconds.
+const sessionCache = new Map();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCached(sessionId) {
+    const entry = sessionCache.get(sessionId);
+    if (!entry) return null;
+    if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+        sessionCache.delete(sessionId);
+        return null;
+    }
+    return entry.data;
+}
+
+function setCache(sessionId, data) {
+    sessionCache.set(sessionId, { data, timestamp: Date.now() });
+}
+
+function clearCache(sessionId) {
+    sessionCache.delete(sessionId);
+}
+
+// ─── Session CRUD ─────────────────────────────────────────────
+
+/**
+ * Read a session document from MongoDB.
+ * Checks RAM cache first to avoid unnecessary DB reads.
+ * @param {string} sessionId - e.g. "255712345678@s.whatsapp.net"
+ */
+async function getSession(sessionId) {
+    const cached = getCached(sessionId);
+    if (cached) return cached;
+
+    try {
+        const session = await Session.findOne({ sessionId }).lean();
+        if (session) setCache(sessionId, session);
+        return session;
+    } catch (err) {
+        console.error(chalk.red(`❌ getSession [${sessionId}]: ${err.message}`));
+        return null;
+    }
+}
+
+/**
+ * Upsert a session document and refresh its TTL.
+ * @param {string} sessionId
+ * @param {object} data - Partial session fields to update
+ */
+async function saveSession(sessionId, data) {
+    try {
+        const update = {
+            ...data,
+            lastSeen:  new Date(),
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // extend TTL
+        };
+
+        await Session.findOneAndUpdate(
+            { sessionId },
+            { $set: update },
+            { upsert: true, new: true }
+        );
+
+        const existing = getCached(sessionId) || {};
+        setCache(sessionId, { ...existing, ...update, sessionId });
+
+    } catch (err) {
+        console.error(chalk.red(`❌ saveSession [${sessionId}]: ${err.message}`));
+        throw err;
+    }
+}
+
+/**
+ * Permanently delete a session from MongoDB and the cache.
+ * Called when a user logs out or an admin deletes the session.
+ * @param {string} sessionId
+ */
+async function deleteSession(sessionId) {
+    try {
+        await Session.deleteOne({ sessionId });
+        clearCache(sessionId);
+        console.log(chalk.yellow(`🗑️ Session deleted: ${sessionId}`));
+    } catch (err) {
+        console.error(chalk.red(`❌ deleteSession [${sessionId}]: ${err.message}`));
+        throw err;
+    }
+}
+
+/**
+ * Check whether a session exists in MongoDB.
+ * @param {string} sessionId
+ * @returns {boolean}
+ */
+async function sessionExists(sessionId) {
+    if (getCached(sessionId)) return true;
+    try {
+        return (await Session.countDocuments({ sessionId })) > 0;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Return all sessionIds that have completed pairing.
+ * Used by autoload.js on startup.
+ * @returns {string[]}
+ */
+async function getAllRegisteredSessions() {
+    try {
+        const sessions = await Session.find(
+            { isRegistered: true },
+            { sessionId: 1, _id: 0 }
+        ).lean();
+        return sessions.map(s => s.sessionId);
+    } catch (err) {
+        console.error(chalk.red(`❌ getAllRegisteredSessions: ${err.message}`));
+        return [];
+    }
+}
+
+/**
+ * Mark a session as active or inactive.
+ * Also refreshes the TTL so active sessions are never auto-deleted.
+ * @param {string} sessionId
+ * @param {boolean} isActive
+ */
+async function setSessionActive(sessionId, isActive) {
+    try {
+        await Session.findOneAndUpdate(
+            { sessionId },
+            {
+                $set: {
+                    isActive,
+                    lastSeen:  new Date(),
+                    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                }
+            }
+        );
+
+        const cached = getCached(sessionId);
+        if (cached) setCache(sessionId, { ...cached, isActive, lastSeen: new Date() });
+
+    } catch (err) {
+        console.error(chalk.red(`❌ setSessionActive [${sessionId}]: ${err.message}`));
+    }
+}
+
+// ─── Baileys Auth State ───────────────────────────────────────
+
+/**
+ * useMongoAuthState
+ *
+ * Drop-in replacement for Baileys' useMultiFileAuthState().
+ * Returns the same { state, saveCreds } interface but persists
+ * everything to MongoDB instead of the filesystem.
+ *
+ * @param {string} sessionId - WhatsApp JID e.g. "255712345678@s.whatsapp.net"
+ * @returns {{ state: object, saveCreds: Function }}
+ */
+async function useMongoAuthState(sessionId) {
+    const sessionDoc = await getSession(sessionId);
+
+    const state = {
+        creds: sessionDoc?.creds || null,
+        keys: {
+            /**
+             * Retrieve signal keys of a given type for a list of IDs.
+             * Called frequently by Baileys during message encryption.
+             */
+            get: async (type, ids) => {
+                try {
+                    const doc     = await getSession(sessionId);
+                    const keyData = doc?.keys?.[type] || {};
+                    const result  = {};
+
+                    for (const id of ids) {
+                        if (keyData[id] !== undefined && keyData[id] !== null) {
+                            result[id] = keyData[id];
+                        }
+                    }
+                    return result;
+                } catch (err) {
+                    console.error(chalk.red(`❌ keys.get: ${err.message}`));
+                    return {};
+                }
+            },
+
+            /**
+             * Persist new or updated signal keys to MongoDB.
+             * Null values indicate key deletion.
+             */
+            set: async (data) => {
+                try {
+                    const doc          = await getSession(sessionId);
+                    const updatedKeys  = { ...(doc?.keys || {}) };
+
+                    for (const [type, typeData] of Object.entries(data)) {
+                        if (!updatedKeys[type]) updatedKeys[type] = {};
+
+                        for (const [id, value] of Object.entries(typeData)) {
+                            if (value !== null && value !== undefined) {
+                                updatedKeys[type][id] = value;
+                            } else {
+                                delete updatedKeys[type][id];
+                            }
+                        }
+
+                        if (Object.keys(updatedKeys[type]).length === 0) {
+                            delete updatedKeys[type];
+                        }
+                    }
+
+                    await saveSession(sessionId, { keys: updatedKeys });
+                } catch (err) {
+                    console.error(chalk.red(`❌ keys.set: ${err.message}`));
+                }
+            }
+        }
+    };
+
+    /**
+     * saveCreds
+     * Called by Baileys whenever credentials change (e.g. after pairing).
+     * Persists the updated creds object to MongoDB.
+     */
+    const saveCreds = async () => {
+        try {
+            await saveSession(sessionId, {
+                creds:        state.creds,
+                isRegistered: !!(state.creds?.registered),
+                isActive:     true
+            });
+        } catch (err) {
+            console.error(chalk.red(`❌ saveCreds [${sessionId}]: ${err.message}`));
+        }
+    };
+
+    return { state, saveCreds };
+}
+
+// ─── Pairing Code Helpers ─────────────────────────────────────
+
+/**
+ * Save a generated pairing code to MongoDB.
+ * Also creates or updates the user record.
+ * @param {string} number - Clean number "255712345678"
+ * @param {string} code   - e.g. "ABCD-1234"
+ * @param {string} source - "telegram" | "website"
+ */
+async function savePairingCode(number, code, source = 'website') {
+    const { Pairing, User } = require('./db');
+
+    try {
+        await Pairing.findOneAndUpdate(
+            { number },
+            {
+                $set: {
+                    code,
+                    status:    'ready',
+                    source,
+                    expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+                }
+            },
+            { upsert: true, new: true }
+        );
+
+        await User.findOneAndUpdate(
+            { number },
+            {
+                $set: {
+                    lastPaired:  new Date(),
+                    source,
+                    lastServer:  process.env.SERVER_NAME || 'Main Server'
+                },
+                $inc: { totalPairings: 1 }
+            },
+            { upsert: true }
+        );
+
+        console.log(chalk.green(`✅ Pairing code saved: ${number} → ${code}`));
+    } catch (err) {
+        console.error(chalk.red(`❌ savePairingCode: ${err.message}`));
+        throw err;
+    }
+}
+
+/**
+ * Retrieve a pairing code document from MongoDB.
+ * @param {string} number
+ * @returns {object|null}
+ */
+async function getPairingCode(number) {
+    const { Pairing } = require('./db');
+    try {
+        return await Pairing.findOne({ number }).lean();
+    } catch (err) {
+        console.error(chalk.red(`❌ getPairingCode: ${err.message}`));
+        return null;
+    }
+}
+
+/**
+ * Remove a pairing code after it has been used.
+ * @param {string} number
+ */
+async function deletePairingCode(number) {
+    const { Pairing } = require('./db');
+    try {
+        await Pairing.deleteOne({ number });
+    } catch (err) {
+        console.error(chalk.red(`❌ deletePairingCode: ${err.message}`));
+    }
+}
+
+// ─── Debug Helpers ────────────────────────────────────────────
+function getCacheStats() {
+    return { size: sessionCache.size, keys: [...sessionCache.keys()] };
+}
+
+// ─── Exports ──────────────────────────────────────────────────
+module.exports = {
+    useMongoAuthState,
+    getSession,
+    saveSession,
+    deleteSession,
+    sessionExists,
+    getAllRegisteredSessions,
+    setSessionActive,
+    savePairingCode,
+    getPairingCode,
+    deletePairingCode,
+    getCacheStats,
+    clearCache
+};
