@@ -1,203 +1,167 @@
-const fs = require('fs').promises;
-const path = require('path');
+/**
+ * autoload.js - Auto Load All Paired Sessions
+ * Adevos Min-Bot
+ *
+ * Changes from previous version:
+ * - Removed: fs.readdir() on ./nexstore/pairing/
+ * - Removed: filter by endsWith('@s.whatsapp.net')
+ * - Added:   getAllRegisteredSessions() from MongoDB
+ * - Kept:    Batch processing logic (unchanged)
+ * - Kept:    Shutdown signal handling (unchanged)
+ */
+
+'use strict';
+
 const chalk = require('chalk');
+const { connectDB }               = require('./db');
+const { getAllRegisteredSessions } = require('./sessionStore');
 
 let isAutoLoadRunning = false;
-let isShuttingDown = false;
+let isShuttingDown    = false;
 
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+// ─── Shutdown Signal Handlers ─────────────────────────────────
+process.on('message', (msg) => { if (msg === 'shutdown') { console.log(chalk.yellow('🛑 PM2 shutdown')); isShuttingDown = true; } });
+process.on('SIGINT',  () => { isShuttingDown = true; });
+process.on('SIGTERM', () => { isShuttingDown = true; });
 
-process.on('message', (msg) => {
-  if (msg === 'shutdown') {
-    console.log(chalk.yellow('🛑 Received PM2 shutdown signal'));
-    isShuttingDown = true;
-  }
-});
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-process.on('SIGINT', () => {
-  console.log(chalk.yellow('🛑 Received SIGINT signal'));
-  isShuttingDown = true;
-});
+// ─── Process Single Session ───────────────────────────────────
 
-process.on('SIGTERM', () => {
-  console.log(chalk.yellow('🛑 Received SIGTERM signal'));
-  isShuttingDown = true;
-});
+/**
+ * Connect one session by its sessionId.
+ * Clears the require cache before each call to avoid stale closures.
+ * @param {string} sessionId
+ * @param {number} index
+ * @param {number} total
+ */
+async function processUser(sessionId, index, total) {
+    if (isShuttingDown) throw new Error('Shutdown in progress');
 
-// Helper function to process a single user
-async function processUser(user, index, total) {
-  if (isShuttingDown) {
-    throw new Error('Shutdown in progress');
-  }
-  
-  console.log(chalk.blue(`⌛ Connecting ${index + 1}/${total}: ${user}`));
-  
-  try {
-    const startpairing = require('./pair');
-    await startpairing(user);
-    
-    // Clean up require cache for this specific user
-    delete require.cache[require.resolve('./pair')];
-    
-    console.log(chalk.green(`✅ Connected: ${user}`));
-    return user;
-  } catch (error) {
-    console.log(chalk.red(`❌ Failed for ${user}: ${error.message}`));
-    // Clean up cache even on error
-    delete require.cache[require.resolve('./pair')];
-    throw error;
-  }
-}
-
-// Helper function to process users in batches
-async function processBatch(users, batchSize = 10) {
-  const results = [];
-  
-  for (let i = 0; i < users.length; i += batchSize) {
-    if (isShuttingDown) {
-      console.log(chalk.yellow('⏹️ Stopping batch processing due to shutdown'));
-      break;
-    }
-    
-    const batch = users.slice(i, i + batchSize);
-    const batchNumber = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(users.length / batchSize);
-    
-    console.log(chalk.cyan(`🔄 Processing batch ${batchNumber}/${totalBatches} (${batch.length} users)`));
-    
-    const batchPromises = batch.map((user, index) => 
-      processUser(user, i + index, users.length)
-        .catch(error => {
-          return { user, error: error.message, success: false };
-        })
-    );
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    results.push(...batchResults);
-    
-    // Small delay between batches to prevent overwhelming the system
-    if (i + batchSize < users.length && !isShuttingDown) {
-      console.log(chalk.gray(`⏳ Waiting 2 seconds before next batch...`));
-      await delay(2000);
-    }
-  }
-  
-  return results;
-}
-
-// Helper function to count successful results
-function countSuccessful(results) {
-  return results.filter(result => {
-    if (result.status === 'fulfilled') {
-      // Check if it's a string (successful user) or an error object
-      return typeof result.value === 'string';
-    }
-    return false;
-  }).length;
-}
-
-module.exports = {
-  autoLoadPairs: async (options = {}) => {
-    if (isShuttingDown) {
-      console.log(chalk.yellow('⚠️ Skipping auto-load (shutdown in progress)'));
-      return { success: false, message: 'Shutdown in progress' };
-    }
-    
-    if (isAutoLoadRunning) {
-      console.log(chalk.yellow('⚠️ Auto-load already in progress. Skipping...'));
-      return { success: false, message: 'Auto-load already running' };
-    }
-    
-    isAutoLoadRunning = true;
-    console.log(chalk.yellow('🔄 Auto-loading all paired users...'));
+    console.log(chalk.blue(`⌛ Connecting ${index + 1}/${total}: ${sessionId}`));
 
     try {
-      const pairingDir = path.join(__dirname, 'nexstore', 'pairing');
-      
-      // Check if pairing directory exists
-      try {
-        await fs.access(pairingDir);
-      } catch {
-        console.log(chalk.red('❌ Pairing directory not found.'));
-        return { success: false, message: 'Pairing directory not found', total: 0, successful: 0 };
-      }
-
-      // Read all directories in pairing folder
-      const files = await fs.readdir(pairingDir, { withFileTypes: true });
-      const pairUsers = files
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name)
-        .filter(name => name.endsWith('@s.whatsapp.net'));
-
-      if (pairUsers.length === 0) {
-        console.log(chalk.yellow('ℹ️ No paired users found.'));
-        return { success: true, message: 'No users to load', total: 0, successful: 0 };
-      }
-
-      console.log(chalk.green(`✅ Found ${pairUsers.length} paired users. Starting connections...`));
-
-      const startTime = Date.now();
-      let results;
-      let successful = 0;
-      
-      // Option 1: Process all at once (fastest but resource intensive)
-      if (options.concurrent === true) {
-        console.log(chalk.cyan('🚀 Processing all users concurrently...'));
-        
-        const promises = pairUsers.map((user, index) => 
-          processUser(user, index, pairUsers.length)
-            .catch(error => {
-              return { user, error: error.message, success: false };
-            })
-        );
-        
-        results = await Promise.allSettled(promises);
-        successful = countSuccessful(results);
-        
-        console.log(chalk.green(`✅ Processed ${successful}/${pairUsers.length} users successfully`));
-        
-      } else {
-        // Option 2: Process in batches (balanced approach - RECOMMENDED)
-        const batchSize = options.batchSize || 5;
-        console.log(chalk.cyan(`🔄 Processing users in batches of ${batchSize}...`));
-        
-        results = await processBatch(pairUsers, batchSize);
-        successful = countSuccessful(results);
-        
-        console.log(chalk.green(`✅ Processed ${successful}/${pairUsers.length} users successfully`));
-      }
-      
-      const endTime = Date.now();
-      const duration = ((endTime - startTime) / 1000).toFixed(2);
-      const failed = pairUsers.length - successful;
-      
-      console.log(chalk.green(`🎉 Auto-load completed in ${duration} seconds`));
-      console.log(chalk.cyan(`📊 Success: ${successful} | Failed: ${failed} | Total: ${pairUsers.length}`));
-      
-      return {
-        success: true,
-        total: pairUsers.length,
-        successful: successful,
-        failed: failed,
-        duration: duration
-      };
-      
-    } catch (error) {
-      console.error(chalk.red('❌ Auto-load error:'), error);
-      return {
-        success: false,
-        message: error.message,
-        total: 0,
-        successful: 0
-      };
-    } finally {
-      isAutoLoadRunning = false;
+        delete require.cache[require.resolve('./pair')];
+        const startpairing = require('./pair');
+        await startpairing(sessionId);
+        console.log(chalk.green(`✅ Connected: ${sessionId}`));
+        return sessionId;
+    } catch (err) {
+        console.log(chalk.red(`❌ Failed [${sessionId}]: ${err.message}`));
+        delete require.cache[require.resolve('./pair')];
+        throw err;
     }
-  },
-  
-  // Export status checkers for external use
-  isRunning: () => isAutoLoadRunning,
-  isShuttingDown: () => isShuttingDown
+}
+
+// ─── Batch Processing ─────────────────────────────────────────
+
+/**
+ * Process an array of sessionIds in batches.
+ * Each batch runs concurrently; batches are separated by a short delay.
+ * @param {string[]} sessions
+ * @param {number}   batchSize
+ */
+async function processBatch(sessions, batchSize = 10) {
+    const results = [];
+
+    for (let i = 0; i < sessions.length; i += batchSize) {
+        if (isShuttingDown) {
+            console.log(chalk.yellow('⏹️ Batch stopped — shutdown signal received'));
+            break;
+        }
+
+        const batch      = sessions.slice(i, i + batchSize);
+        const batchNum   = Math.floor(i / batchSize) + 1;
+        const totalBatch = Math.ceil(sessions.length / batchSize);
+
+        console.log(chalk.cyan(`🔄 Batch ${batchNum}/${totalBatch} — ${batch.length} sessions`));
+
+        const batchResults = await Promise.allSettled(
+            batch.map((sid, idx) =>
+                processUser(sid, i + idx, sessions.length)
+                    .catch(err => ({ sessionId: sid, error: err.message }))
+            )
+        );
+
+        results.push(...batchResults);
+
+        if (i + batchSize < sessions.length && !isShuttingDown) {
+            console.log(chalk.gray('⏳ Waiting 2s before next batch...'));
+            await delay(2000);
+        }
+    }
+
+    return results;
+}
+
+function countSuccessful(results) {
+    return results.filter(r => r.status === 'fulfilled' && typeof r.value === 'string').length;
+}
+
+// ─── Main Export ──────────────────────────────────────────────
+
+module.exports = {
+    /**
+     * autoLoadPairs
+     * Reads all registered sessions from MongoDB and connects them.
+     * Called on bot startup or manually via /autoload Telegram command.
+     *
+     * @param {object}  options
+     * @param {boolean} options.concurrent - Connect all at once (not recommended for 100+)
+     * @param {number}  options.batchSize  - Sessions per batch, default 10
+     */
+    autoLoadPairs: async (options = {}) => {
+        if (isShuttingDown)    return { success: false, message: 'Shutdown in progress' };
+        if (isAutoLoadRunning) { console.log(chalk.yellow('⚠️ Auto-load already running')); return { success: false, message: 'Already running' }; }
+
+        isAutoLoadRunning = true;
+        console.log(chalk.yellow('🔄 Auto-loading sessions from MongoDB...'));
+
+        try {
+            await connectDB();
+
+            // Read session list from MongoDB instead of disk
+            const sessions = await getAllRegisteredSessions();
+
+            if (sessions.length === 0) {
+                console.log(chalk.yellow('ℹ️ No registered sessions found'));
+                return { success: true, message: 'No sessions to load', total: 0, successful: 0 };
+            }
+
+            console.log(chalk.green(`✅ Found ${sessions.length} sessions — loading...`));
+
+            const startTime = Date.now();
+            let results;
+
+            if (options.concurrent === true) {
+                // All at once — fast but memory-intensive
+                results = await Promise.allSettled(
+                    sessions.map((s, i) =>
+                        processUser(s, i, sessions.length).catch(err => ({ sessionId: s, error: err.message }))
+                    )
+                );
+            } else {
+                // Batched — safer for large numbers of sessions
+                results = await processBatch(sessions, options.batchSize || 10);
+            }
+
+            const duration   = ((Date.now() - startTime) / 1000).toFixed(2);
+            const successful = countSuccessful(results);
+            const failed     = sessions.length - successful;
+
+            console.log(chalk.green(`🎉 Auto-load complete in ${duration}s`));
+            console.log(chalk.cyan(`📊 Success: ${successful} | Failed: ${failed} | Total: ${sessions.length}`));
+
+            return { success: true, total: sessions.length, successful, failed, duration };
+
+        } catch (err) {
+            console.error(chalk.red(`❌ Auto-load error: ${err.message}`));
+            return { success: false, message: err.message, total: 0, successful: 0 };
+        } finally {
+            isAutoLoadRunning = false;
+        }
+    },
+
+    isRunning:      () => isAutoLoadRunning,
+    isShuttingDown: () => isShuttingDown
 };
