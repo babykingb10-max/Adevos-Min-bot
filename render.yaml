@@ -1,0 +1,87 @@
+# render.yaml - Render Deployment Configuration
+# Adevos Min-Bot
+#
+# Usage:
+# 1. Push your repo to GitHub
+# 2. Go to Render.com → New → Blueprint
+# 3. Connect your GitHub repo
+# 4. Render reads this file automatically
+# 5. Set secret environment variables in the Render dashboard
+
+services:
+  # ─── Main Bot Service (Telegram + WhatsApp) ───────────────
+  - type: web
+    name: adevos-min-bot
+    runtime: node
+    plan: free           # Upgrade to "starter" ($7/mo) for always-on
+    buildCommand: npm install
+    startCommand: node bot.js
+    healthCheckPath: /health
+
+    envVars:
+      # Set these in Render dashboard (marked sync: false = secret)
+      - key: MONGODB_URI
+        sync: false
+
+      - key: BOT_TOKEN
+        sync: false
+
+      - key: ADMIN_IDS
+        sync: false
+
+      - key: ADMIN_USERNAME
+        sync: false
+
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      - key: JWT_SECRET
+        sync: false
+
+      # These can be set directly in render.yaml (not secret)
+      - key: SERVER_NAME
+        value: Main Server
+
+      - key: MAX_CONNECTIONS
+        value: "100"
+
+      - key: NODE_ENV
+        value: production
+
+      - key: TG_BOT_URL
+        value: https://t.me/adevosmin_bot
+
+    autoDeploy: true   # Auto-redeploy on every git push to main
+
+  # ─── Website Service (uncomment if in same repo) ──────────
+  # If your website (server.js + index.html + admin.html) is in
+  # the same repo as the bot, uncomment this second service block.
+  #
+  # - type: web
+  #   name: adevos-website
+  #   runtime: node
+  #   plan: free
+  #   buildCommand: npm install
+  #   startCommand: node server.js
+  #   healthCheckPath: /health
+  #
+  #   envVars:
+  #     - key: MONGODB_URI
+  #       sync: false
+  #     - key: ADMIN_USERNAME
+  #       sync: false
+  #     - key: ADMIN_PASSWORD
+  #       sync: false
+  #     - key: JWT_SECRET
+  #       sync: false
+  #     - key: SERVER_NAME
+  #       value: Main Server
+  #     - key: MAX_CONNECTIONS
+  #       value: "100"
+  #     - key: TG_BOT_URL
+  #       value: https://t.me/adevosmin_bot
+  #     # Only needed if website and bot are separate services:
+  #     # - key: BOT_WEBHOOK_URL
+  #     #   sync: false
+  #     # - key: INTERNAL_SECRET
+  #     #   sync: false
