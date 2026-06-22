@@ -116,8 +116,6 @@ const body = (
 
     ""
 );
-global.autoViewStatus = false;
-global.autoLikeStatus = false;
 const prefix = '.'; // Only dot as prefix
 const owner = JSON.parse(fs.readFileSync('./allfunc/owner.json'))
 const Premium = JSON.parse(fs.readFileSync('./allfunc/premium.json'))
@@ -315,12 +313,6 @@ if (getSetting(m.sender, "banned", false)) {
     return
 }
 
-if (getSetting(m.chat, "feature.autoreply", false)) {
-   const autoReplyList = { "hi": "Hello 👋", "hello": "Hi there!", "I am Adevos-X 🥷": "Coolest Whatsapp bot 😌" }
-   if (autoReplyList[m.text?.toLowerCase()]) {
-      await King.sendMessage(m.chat, { text: autoReplyList[m.text.toLowerCase()] }, { quoted: m })
-   }
-}
 if (getSetting(m.chat, "feature.antibadword", false)) {
    const badWords = ["fuck", "bitch", "sex", "nigga","bastard","fool","mumu","idiot","werey","mad","dick","pussy","bast"]
    if (badWords.some(word => m.text?.toLowerCase().includes(word))) {
@@ -904,7 +896,7 @@ case 'menu': {
 │ ✧ 𝐏𝐥𝐚𝐭𝐟𝐨𝐫𝐦: 𝐓𝐞𝐥𝐞𝐠𝐫𝐚𝐦
 │ ✧ 𝐒𝐩𝐞𝐞𝐝: ${latensi.toFixed(4)} Ms
 │ ✧ 𝐔𝐩𝐭𝐢𝐦𝐞: ${formatUptime(process.uptime())}
-│ ✧ 𝐕𝐞𝐫𝐬𝐢𝐨𝐧: 1.1.0
+│ ✧ 𝐕𝐞𝐫𝐬𝐢𝐨𝐧: 2.0.0
 │ ✧ 𝐑𝐚𝐦: ${runtime}
 │ ✧ 𝐔𝐬𝐚𝐠𝐞: ${ram}
 ╰◆\n\n> Developed By Adevos\n\n
@@ -921,11 +913,8 @@ ${readMore}
 │ ◇ ${prefix}public
 │ ◇ ${prefix}take
 │ ◇ ${prefix}setpp
-│ ◇ ${prefix}autoviewstatus
-│ ◇ ${prefix}autolikestatus
 │ ◇ ${prefix}autotyping
 │ ◇ ${prefix}autobio
-│ ◇ ${prefix}autoreply
 │ ◇ ${prefix}autorecording
 │ ◇ ${prefix}autoreact
 │ ◇ ${prefix}autoread
@@ -977,10 +966,8 @@ ${readMore}
 │ ◇ ${prefix}apk
 │ ◇ ${prefix}play2
 │ ◇ ${prefix}playdoc
-│ ◇ ${prefix}playdoc2
 │ ◇ ${prefix}video
 │ ◇ ${prefix}videodoc
-│ ◇ ${prefix}spotify
 ╰────────────────◆
 
 ╭─ 𝐀𝐮𝐝𝐢𝐨 𝐂𝐨𝐦𝐦𝐚𝐧𝐝𝐬 ─◆
@@ -1367,7 +1354,7 @@ ${readMore}
 │ ◇ ${prefix}support
 ╰────────────────◆
 
-> CalmX | SilentPower 
+> CalmX 
 `;
 
 
@@ -1904,108 +1891,7 @@ case "autoreact": {
     } else m.reply("Usage: autoreact on/off");
 }
 break;
-/* ======================================================
-   COMMAND: AUTO VIEW STATUS
-====================================================== */
-case 'autoviewstatus': {
-  if (!usedWithPrefix(m, command, prefix)) return;
 
-  if (!text) return reply("Usage:\n.autoviewstatus on\n.autoviewstatus off");
-
-  const opt = text.toLowerCase();
-
-  if (opt === 'on') {
-    setSetting(sender, "autoview", true);
-    reply("✅ Auto view status  enabled");
-  } else if (opt === 'off') {
-    setSetting(sender, "autoview", false);
-    reply("❌ Auto view status disabled");
-  } else {
-    reply("Choose  *On* Or *Off*");
-  }
-}
-break;
-
-/* ======================================================
-   COMMAND: AUTO LIKE STATUS
-====================================================== */
-case 'autolikestatus': {
-  if (!usedWithPrefix(m, command, prefix)) return;
-
-  if (!text) return reply("Usage:\n.autolikestatus on\n.autolikestatus off");
-
-  const opt = text.toLowerCase();
-
-  if (opt === 'on') {
-    setSetting(sender, "autolike", true);
-    reply("✅ Auto like status enabled");
-  } else if (opt === 'off') {
-    setSetting(sender, "autolike", false);
-    reply("❌ Auto like status disabled ");
-  } else {
-    reply("Choose *On* Or *Off*");
-  }
-}
-break;
-
-/* ======================================================
-   COMMAND: STATUS SETTINGS
-====================================================== */
-case 'statussettings': {
-  if (!usedWithPrefix(m, command, prefix)) return;
-  if (!isCreator) return reply("❌ Only for bot owner ");
-
-  reply(`
- Auto view : ${getSetting(sender, "autoview", false) ? '✅ On' : '❌ Off'}
- Auto like : ${getSetting(sender, "autolike", false) ? '✅ On' : '❌ Off'}
- Emoji : ${Array.isArray(global.statusSettings.likeEmoji) ? global.statusSettings.likeEmoji.join(' ') : global.statusSettings.likeEmoji}
-`);
-}
-break;
-/* ======================================================
-   COMMAND: AUTO VIEW STATUS
-====================================================== */
-/*case 'autoviewstatus': {
-  if (!usedWithPrefix(m, command, prefix)) return;
-
-  if (!text) return reply("⚡ ᴜsᴀɢᴇ:\n.autoviewstatus on\n.autoviewstatus off");
-
-  const opt = text.toLowerCase();
-
-  if (opt === 'on') {
-    setSetting(sender, "autoview", true);
-    reply("✅ ᴀᴜᴛᴏ ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ ᴇɴᴀʙʟᴇᴅ ꜰᴏʀ ʏᴏᴜ");
-  } else if (opt === 'off') {
-    setSetting(sender, "autoview", false);
-    reply("❌ ᴀᴜᴛᴏ ᴠɪᴇᴡ ꜱᴛᴀᴛᴜꜱ ᴅɪꜱᴀʙʟᴇᴅ ꜰᴏʀ ʏᴏᴜ");
-  } else {
-    reply("⚡ ᴄʜᴏᴏꜱᴇ *ᴏɴ* ᴏʀ *ᴏꜰꜰ*");
-  }
-}
-break;*/
-
-/* ======================================================
-   COMMAND: AUTO LIKE STATUS
-====================================================== */
-/*case 'autolikestatus': {
-  if (!usedWithPrefix(m, command, prefix)) return;
-
-  if (!text) return reply("⚡ ᴜsᴀɢᴇ:\n.autolikestatus on\n.autolikestatus off");
-
-  const opt = text.toLowerCase();
-
-  if (opt === 'on') {
-    setSetting(sender, "autolike", true);
-    reply("✅ ᴀᴜᴛᴏ ʟɪᴋᴇ ꜱᴛᴀᴛᴜꜱ ᴇɴᴀʙʟᴇᴅ ꜰᴏʀ ʏᴏᴜ");
-  } else if (opt === 'off') {
-    setSetting(sender, "autolike", false);
-    reply("❌ ᴀᴜᴛᴏ ʟɪᴋᴇ ꜱᴛᴀᴛᴜꜱ ᴅɪꜱᴀʙʟᴇᴅ ꜰᴏʀ ʏᴏᴜ");
-  } else {
-    reply("⚡ ᴄʜᴏᴏꜱᴇ *ᴏɴ* ᴏʀ *ᴏꜰꜰ*");
-  }
-}
-break;*/
- 
 // 🔹 Banned
 case "ban": {
     if (!usedWithPrefix(m, command, prefix)) return;
@@ -2169,24 +2055,6 @@ case "unban": {
 }
 break;
 
-// 🔹 Feature: Auto Reply
-case "autoreply": {
-    if (!usedWithPrefix(m, command, prefix)) return;
-    if (!isCreator) return m.reply("This command is restricted to owner only");
-    if (!args[0]) return m.reply("Usage: autoreply on/off");
-    if (args[0].toLowerCase() === "on") {
-        setSetting(m.chat, "feature.autoreply", true);
-        m.reply("✅ Auto Reply *enabled* in this chat");
-    } else if (args[0].toLowerCase() === "off") {
-        setSetting(m.chat, "feature.autoreply", false);
-        m.reply("❌ Auto Reply *disabled* in this chat");
-    } else m.reply("Usage: autoreplyfeature on/off");
-}
-break;
-
-// 🔹 Feature: Anti Spam
-
-
 // 🔹 Feature: Anti Bad Word
 case "antibadword": {
     if (!usedWithPrefix(m, command, prefix)) return;
@@ -2241,29 +2109,49 @@ case 'sc':
 case 'botinfo':
 case 'repo': {
     if (!usedWithPrefix(m, command, prefix)) return;
-   let txt = `
-╭──── [ *Adevos Min-Bot* ] ────
+
+    let txt = `
+*╭──── [ ADEVOS MIN-BOT ]*
 │
-├1️⃣ https://t.me/adevosmin_bot 
-│ 
-├2️⃣ https://t.me/adevosmin2_bot 
-│ 
-├3️⃣ https://t.me/adevosmin3bot 
+├ 🌍 *Website:*
+│  https://adevosminbot.adevosxtech.site
 │
-├4️⃣ http://t.me/adevosmin4bot 
-│ 
-├5️⃣ http://t.me/adevosmin5bot  
+├ 📋 *How To Pair:*
 │
-├🎥 *Tutorial Video:* 
-│ 
-├🔹 https://vt.tiktok.com/ZSuvRRjWY/
+│  *Step 1:* Open the website link above
 │
-├🔹 *Use any of the available servers*
-│ *above, don't overload one server*
-╰───────────────────────`
-   await King.sendMessage(m.chat, { text: txt }, { quoted: m })
+│  *Step 2:* Choose pairing method:
+│
+│  🔹 *Option A — Via Telegram:*
+│  • Click *"Pair via Telegram"*
+│  • A Telegram bot will open
+│  • Send your WhatsApp number
+│  • Copy the pairing code sent
+│  • Open WhatsApp ➜ Linked Devices
+│  • Tap *"Link with phone number"*
+│  • Enter the pairing code ✅
+│
+│  🔹 *Option B — Via Website:*
+│  • Click *"Connect WhatsApp"*
+│  • Enter your WhatsApp number
+│  • Copy the pairing code shown
+│  • Open WhatsApp ➜ Linked Devices
+│  • Tap *"Link with phone number"*
+│  • Enter the pairing code ✅
+│
+├ 🎥 *Tutorial Video:*
+│  https://vt.tiktok.com/ZSuvRRjWY/
+│
+├ ⚠️ *Notice:*
+│  • Website is available 24/7
+│  • If one method fails, try the other
+│  • Watch tutorial video if stuck
+╰─────────────────────\n\n
+> *Powered by Adevos-X Tech*`;
+
+    await King.sendMessage(m.chat, { text: txt }, { quoted: m });
+    break;
 }
-break;
     case 'url':
     case 'tourl': {    
     if (!usedWithPrefix(m, command, prefix)) return;
@@ -2801,46 +2689,82 @@ case 'tt':
 case 'apk':
 case 'apkdl': {
     if (!usedWithPrefix(m, command, prefix)) return;
-  if (!text) {
-    return reply(`*Example:* ${prefix + command} com.whatsapp`);
-  }
-  
-  try {
-    const packageId = text.trim();
-    const res = await fetch(`https://api.bk9.dev/download/apk?id=${encodeURIComponent(packageId)}`);
-    const data = await res.json();
-
-    if (!data.status || !data.BK9 || !data.BK9.dllink) {
-      return reply(' *APK not found.* The package ID might be incorrect or the API failed. Please try a different one.');
+    if (!text) {
+        return reply(`*Example:* ${prefix + command} WhatsApp\n\n_You can use app name or package ID_`);
     }
 
-    const { name, icon, dllink, package: packageName } = data.BK9;
+    try {
+        await King.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-    await King.sendMessage(m.chat, {
-      image: { url: emperor},
-      caption:
-`╭〔 *📦 APK Downloader* 〕─⬣
+        const query = text.trim();
+        let packageId = query;
+
+        // Auto-detect: jina au package ID
+        if (!query.includes('.')) {
+            const searchRes = await axios.get(
+                `https://api.bk9.dev/search/apk?q=${encodeURIComponent(query)}`,
+                { timeout: 15000 }
+            );
+
+            if (!searchRes.data?.status || !searchRes.data?.BK9?.[0]?.package) {
+                await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+                return reply(`❌ *App not found:* "${query}"\n\nTry using package ID instead.\n*Example:* ${prefix + command} com.whatsapp`);
+            }
+
+            packageId = searchRes.data.BK9[0].package;
+            console.log('Found package ID:', packageId);
+        }
+
+        await King.sendMessage(m.chat, {
+            text: `🔍 Fetching APK for: *${packageId}*...`
+        }, { quoted: m });
+
+        // Download APK info
+        const res = await axios.get(
+            `https://api.bk9.dev/download/apk?id=${encodeURIComponent(packageId)}`,
+            { timeout: 30000 }
+        );
+
+        const data = res.data;
+
+        if (!data.status || !data.BK9 || !data.BK9.dllink) {
+            await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return reply(`❌ *APK not found.*\nPackage: _${packageId}_\n\nTry a different app name or package ID.`);
+        }
+
+        const { name, icon, dllink, package: packageName } = data.BK9;
+
+        // Tumia icon ya app au default image
+        const thumbUrl = icon || 'https://cdn-icons-png.flaticon.com/512/732/732208.png';
+
+        await King.sendMessage(m.chat, {
+            image: { url: thumbUrl },
+            caption:
+`*╭───📦 [ APK DOWNLOADER ]*
 │
-│ 🧩 *Name:* _${name}_
-│ 📁 *Package:* _${packageName}_
-│ 📥 *Download:* [Click Here](${dllink})
+├ 🧩 *Name:* ${name}
+├ 📁 *Package:* ${packageName}
+├ 📥 *Link:* [Click Here](${dllink})
 │
-╰────────────⬣
+╰─────────────────────
 _Sending file, please wait..._`
-    }, { quoted: m });
+        }, { quoted: m });
 
-    await King.sendMessage(m.chat, {
-      document: { url: dllink },
-      fileName: `${name}.apk`,
-      mimetype: 'application/vnd.android.package-archive'
-    }, { quoted: m });
+        await King.sendMessage(m.chat, {
+            document: { url: dllink },
+            fileName: `${name}.apk`,
+            mimetype: 'application/vnd.android.package-archive'
+        }, { quoted: m });
 
-  } catch (e) {
-    console.error(e);
-    reply('*Failed to fetch APK.* An unexpected error occurred. Please try again later.');
-  }
+        await King.sendMessage(from, { react: { text: '✅', key: m.key } });
+
+    } catch (e) {
+        console.error('APK ERROR:', e);
+        await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+        reply('❌ *Failed to fetch APK.* Please try again later.');
+    }
+    break;
 }
-break;
 case 'ttstalk': {
     if (!usedWithPrefix(m, command, prefix)) return;
 if (!args[0]) return reply(`*Enter TikTok Username*\n\nExample: ${prefix + command} `)
@@ -3975,19 +3899,41 @@ case 'gfx12': {
   }
   break;
 }
-case 'getpp':{
+case 'getpp': {
     if (!usedWithPrefix(m, command, prefix)) return;
     if (!isCreator) return reply("This command is restricted to owner only");
-let userss = m.mentionedJid[0] ? m.mentionedJid[0] : m.quoted ? m.quoted.sender : text.replace(/[^0-9]/g, '')+'@s.whatsapp.net'
-let ghosst = userss
-	try {
-   var ppuser = await King.profilePictureUrl(ghosst, 'image')
-} catch (err) {
-   var ppuser = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png?q=60'
+
+    let userss = m.mentionedJid[0] 
+        ? m.mentionedJid[0] 
+        : m.quoted 
+        ? m.quoted.sender 
+        : text 
+        ? text.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
+        : m.sender;
+
+    try {
+        var ppuser = await King.profilePictureUrl(userss, 'image');
+    } catch (err) {
+        var ppuser = 'https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_960_720.png';
+    }
+
+    // Fix: download kwanza kama buffer
+    try {
+        const { default: axios } = require('axios');
+        const res = await axios.get(ppuser, { responseType: 'arraybuffer' });
+        const buffer = Buffer.from(res.data);
+
+        await King.sendMessage(from, {
+            image: buffer,
+            caption: `*Profile Picture*`
+        }, { quoted: m });
+
+    } catch (e) {
+        console.error('getpp send error:', e);
+        reply('❌ Failed to fetch profile picture.');
+    }
+    break;
 }
-King.sendMessage(from, { image: { url: ppuser }}, { quoted: m })
-}
-break;
 case 'yts':
 case 'ytsearch': {
     if (!usedWithPrefix(m, command, prefix)) return;
@@ -5234,7 +5180,7 @@ case 'tgstickers': {
         let packName = packUrl.split("/addstickers/")[1];
 
         // fetch pack info
-        let api = `https://api.telegram.org/bot8041800861:AAEpSfx3seoEgnjA66jYPTuqZ9sB0eBPnbQ/getStickerSet?name=${packName}`;
+        let api = `https://api.telegram.org/bot8554252676:AAE52VhmLq_QfRnEzDHYLf0mhxUaTjyg7qg/getStickerSet?name=${packName}`;
         let { data } = await axios.get(api);
 
         if (!data.ok) return reply("❌ Failed to fetch Telegram sticker pack.");
@@ -5248,9 +5194,9 @@ case 'tgstickers': {
             try {
                 // get file path from Telegram
                 let filePathRes = await axios.get(
-                    `https://api.telegram.org/bot8041800861:AAEpSfx3seoEgnjA66jYPTuqZ9sB0eBPnbQ/getFile?file_id=${stickers[i].file_id}`
+                    `https://api.telegram.org/bot8554252676:AAE52VhmLq_QfRnEzDHYLf0mhxUaTjyg7qg/getFile?file_id=${stickers[i].file_id}`
                 );
-                let fileUrl = `https://api.telegram.org/file/bot8041800861:AAEpSfx3seoEgnjA66jYPTuqZ9sB0eBPnbQ/${filePathRes.data.result.file_path}`;
+                let fileUrl = `https://api.telegram.org/file/bot8554252676:AAE52VhmLq_QfRnEzDHYLf0mhxUaTjyg7qg/${filePathRes.data.result.file_path}`;
 
                 // check extension
                 if (fileUrl.endsWith(".tgs")) {
@@ -5499,9 +5445,9 @@ case 'play': {
 ├ *Title:* ${song.title}
 ├ *Duration:* ${song.duration}
 ├ *Views:* ${song.views.toLocaleString()}
-├ *Author:* ${song.published}
-│
-╰──────────────────◆\n> 𝐏𝐨𝐰𝐞𝐫𝐞𝐝 𝐛𝐲 𝐀𝐝𝐞𝐯𝐨𝐬-𝐗 𝐓𝐞𝐜𝐡
+├ *Published:* ${song.published}
+╰──────────────────◆\n\n
+> 𝐏𝐨𝐰𝐞𝐫𝐞𝐝 𝐛𝐲 𝐀𝐝𝐞𝐯𝐨𝐬-𝐗 𝐓𝐞𝐜𝐡
  
 `.trim()
 
@@ -5613,83 +5559,115 @@ break
     }
 }
         break;
-
 case "nanobanana":
 case "nano": {
     if (!usedWithPrefix(m, command, prefix)) return;
     if (!isCreator) return reply('This command is restricted to owner only');
     
     if (!text) {
-        return reply(`
-ᴜsᴀɢᴇ: ʀᴇᴘʟʏ ᴛᴏ ᴀɴ ɪᴍᴀɢᴇ ᴡɪᴛʜ ᴀ ᴘʀᴏᴍᴘᴛ
-
-ᴇxᴀᴍᴘʟᴇ:
-${prefix + command} add a Christmas hat`);
+        return reply(`Usage: Reply to an image with a prompt\n\nExample:\n${prefix + command} add a Christmas hat`);
     }
 
     const quoted = m.quoted ? m.quoted : m;
     const mime = (quoted.msg || quoted).mimetype || '';
 
     if (!/image/.test(mime)) {
-        return reply('❌ ʀᴇᴘʟʏ ᴛᴏ ᴀɴ ɪᴍᴀɢᴇ!');
+        return reply('❌ Please reply to an image!');
     }
 
-    console.log('uploading image..');
-
     try {
-        // Download the image
-        const media = await quoted.download();
-        
-        // Upload using your function
-        const uploadImage = require('./library/Data6');
-        const imageUrl = await uploadImage(media);
-        
-        console.log('Uploaded Image URL:', imageUrl);
-        
         await King.sendMessage(
             m.chat,
-            { text: '🍌 ᴘʀᴏᴄᴇssɪɴɢ ᴡɪᴛʜ ᴀɪ ᴛʜɪs ᴍᴀʏ ᴛᴀᴋᴇ 30-60 sᴇᴄᴏɴᴅs....' },
+            { text: '🍌 Processing with AI, this may take 30-60 seconds...' },
             { quoted: m }
         );
-        // FIXED: Changed "nanobana" to "nanobanana"
-        const apiUrl = `https://apis.davidcyril.name.ng/nanobanana?url=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(text)}`;
-        
-        console.log('API URL:', apiUrl);
 
-        const response = await axios.get(apiUrl, {
-            timeout: 120000,
-            validateStatus: function (status) {
-                return status < 500;
+        // Download image
+        const media = await quoted.download();
+
+        // Upload using tmpfiles.org (no API key needed)
+        let imageUrl;
+        try {
+            const FormData = require('form-data');
+            const form = new FormData();
+            form.append('file', media, { filename: 'image.jpg', contentType: 'image/jpeg' });
+
+            const uploadRes = await axios.post(
+                'https://tmpfiles.org/api/v1/upload',
+                form,
+                { headers: form.getHeaders(), timeout: 30000 }
+            );
+
+            if (!uploadRes.data?.data?.url) throw new Error('tmpfiles upload failed');
+
+            // Convert to direct link
+            imageUrl = uploadRes.data.data.url.replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+            console.log('Uploaded Image URL:', imageUrl);
+
+        } catch (uploadErr) {
+            console.error('tmpfiles failed, trying pomf...', uploadErr.message);
+
+            // Fallback uploader: pomf.cat
+            try {
+                const FormData = require('form-data');
+                const form2 = new FormData();
+                form2.append('files[]', media, { filename: 'image.jpg', contentType: 'image/jpeg' });
+
+                const uploadRes2 = await axios.post(
+                    'https://pomf.cat/upload.php',
+                    form2,
+                    { headers: form2.getHeaders(), timeout: 30000 }
+                );
+
+                if (!uploadRes2.data?.files?.[0]?.url) throw new Error('pomf upload failed');
+                imageUrl = `https://pomf.cat${uploadRes2.data.files[0].url}`;
+                console.log('Pomf Image URL:', imageUrl);
+
+            } catch (pomfErr) {
+                console.error('All uploaders failed:', pomfErr.message);
+                return reply('❌ Failed to upload image. Please try again.');
             }
-        });
-
-        console.log('Aiedit Response:', JSON.stringify(response.data, null, 2));
-
-        if (!response.data || !response.data.success) {
-            throw new Error(response.data?.error || `API returned error (Status: ${response.status})`);
         }
 
-        if (!response.data.result || !response.data.result.image) {
-            throw new Error('No edited image in API response');
+        // Primary API: davidcyril nanobanana
+        let resultImage = null;
+        try {
+            const apiUrl = `https://apis.davidcyril.name.ng/nanobanana?url=${encodeURIComponent(imageUrl)}&prompt=${encodeURIComponent(text)}`;
+            console.log('Primary API URL:', apiUrl);
+
+            const response = await axios.get(apiUrl, {
+                timeout: 120000,
+                validateStatus: (status) => status < 500
+            });
+
+            if (response.data?.success && response.data?.result?.image) {
+                resultImage = response.data.result.image;
+            } else {
+                throw new Error(response.data?.error || 'Primary API failed');
+            }
+
+        } catch (primaryErr) {
+            console.error('Primary API failed:', primaryErr.message);
+            console.log('Switching to Pollinations fallback...');
+
+            // Fallback: Pollinations AI
+            try {
+                const fallbackUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(text)}?image=${encodeURIComponent(imageUrl)}&model=flux&width=1024&height=1024&nologo=true`;
+                await axios.head(fallbackUrl, { timeout: 60000 });
+                resultImage = fallbackUrl;
+            } catch (fallbackErr) {
+                throw new Error('Both APIs failed. Please try again later.');
+            }
         }
 
         await King.sendMessage(m.chat, {
-            image: { url: response.data.result.image },
-            caption: `*🍌 ɴᴀɴᴏʙᴀɴᴀɴᴀ ʀᴇsᴜʟᴛ*
-
-📝 ᴘʀᴏᴍᴘᴛ: ${text}
-✅ ᴇᴅɪᴛᴇᴅ sᴜᴄᴄᴇssғᴜʟʟʏ!`
+            image: { url: resultImage },
+            caption: `*🍌 Nanobanana Result*\n\n📝 *Prompt:* ${text}\n✅ Edited successfully!`
         }, { quoted: m });
 
     } catch (err) {
-        console.error(' Full Error:', err);
-        console.error('Error Response:', err.response?.data);
-        console.error('Error Status:', err.response?.status);
-        
-        reply(`❌ ғᴀɪʟᴇᴅ ᴛᴏ ᴘʀᴏᴄᴇss ɪᴍᴀɢᴇ
-
-ᴇʀʀᴏʀ: ${err.message}
-sᴛᴀᴛᴜs: ${err.response?.status || 'N/A'}`);
+        console.error('Full Error:', err);
+        reply(`❌ Failed to process image\n\nError: ${err.message}`);
     }
 }
 break;
@@ -5719,8 +5697,8 @@ case 'video': {
 ├ *Duration:* ${video.timestamp}
 ├ *Uploaded:* ${video.ago}
 ├ *Author:* ${video.author?.name || "Unknown"}
-│
-╰──────────────────◆\n> 𝐏𝐨𝐰𝐞𝐫𝐞𝐝 𝐛𝐲 𝐀𝐝𝐞𝐯𝐨𝐬-𝐗 𝐓𝐞𝐜𝐡`;
+╰──────────────────◆\n\n
+> 𝐏𝐨𝐰𝐞𝐫𝐞𝐝 𝐛𝐲 𝐀𝐝𝐞𝐯𝐨𝐬-𝐗 𝐓𝐞𝐜𝐡`;
 
         await King.sendMessage(m.chat, {
             image: { url: video.thumbnail },
@@ -5760,93 +5738,91 @@ await King.sendMessage(m.chat, {
     break;
 }
 case 'song': {
-  if (!usedWithPrefix(m, command, prefix)) return;
-    if (!text) return reply(`*Example:* ${prefix + command} Sailor song by Gigi Perez`);
+  try {
+    if (!usedWithPrefix(m, command, prefix)) return;
+    const axios = require('axios');
+    const yts = require('yt-search');
 
-    try {
-        const query = text.trim();
-        await reply('🔍 Searching for your song request...');
+    const query = args.join(' ');
+    if (!query) return reply(`*Example:* ${prefix + command} Sailor song by Gigi Perez`);
 
-        // 🔹 Search YouTube
-        const search = await yts(query);
-        const video = search.videos?.[0];
-        if (!video) return reply(`❌ No results found for: *${query}*`);
+    await King.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        const {
-            url: videoUrl,
-            title: videoTitle,
-            thumbnail,
-            duration,
-            author
-        } = video;
+    // Pata Audio
+    const { data } = await axios.get(
+      `https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(query)}`
+    );
 
-        // 🔹 Preview message
-        const infoMessage =
-`*🎧 Adevos X - Song Player*
-🎵 *Title:* ${videoTitle}
-🎤 *Artist:* ${author?.name || 'Unknown'}
-⏱️ *Duration:* ${duration?.timestamp || 'N/A'}
-🔗 *Source:* YouTube`;
-
-        await King.sendMessage(
-            m.chat,
-            { image: { url: thumbnail }, caption: infoMessage },
-            { quoted: m }
-        );
-
-        // 🔹 AUDIO DOWNLOAD
-        const audioApi = `https://apis.prexzyvilla.site/download/play?q=${encodeURIComponent(query)}`;
-        const audioRes = await axios.get(audioApi);
-
-        if (
-            audioRes.data?.status &&
-            audioRes.data?.data?.download?.download_url
-        ) {
-            const audioUrl = audioRes.data.data.download.download_url;
-            const title = audioRes.data.data.metadata?.title || videoTitle;
-
-            await King.sendMessage(
-                m.chat,
-                {
-                    audio: { url: audioUrl },
-                    mimetype: 'audio/mpeg',
-                    ptt: false,
-                    fileName: `${title.replace(/[^\w\s]/gi, '')}.mp3`
-                },
-                { quoted: m }
-            );
-        } else {
-            await reply("❌ Failed to fetch audio.");
-        }
-
-        await new Promise(r => setTimeout(r, 1500)); // anti-crash delay
-
-        // 🔹 VIDEO DOWNLOAD
-        const videoApi = `https://apis.prexzyvilla.site/download/ytmp4?url=${encodeURIComponent(videoUrl)}`;
-        const videoRes = await axios.get(videoApi);
-
-        if (videoRes.data?.status && videoRes.data?.data?.downloadURL) {
-            const { downloadURL, title } = videoRes.data.data;
-
-            await King.sendMessage(
-                m.chat,
-                {
-                    video: { url: downloadURL },
-                    mimetype: 'video/mp4',
-                    fileName: `${title.replace(/[^\w\s]/gi, '')}.mp4`,
-                    caption: `🎬 *Here is your video:*\n${title} - ${author?.name || ''}`
-                },
-                { quoted: m }
-            );
-        } else {
-            await reply("❌ Failed to fetch video.");
-        }
-
-    } catch (err) {
-        console.error('Song Command Error:', err);
-        reply('❌ An error occurred while processing your request.');
+    if (!data.status || !data.result) {
+      await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+      return reply('❌ Song not found');
     }
-    break;
+
+    const song = data.result;
+
+    // Tafuta Video URL
+    const search = await yts(query);
+    const video = search.videos?.[0];
+    if (!video) {
+      await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+      return reply('❌ Video not found');
+    }
+
+    const caption = `
+╭─── [ SONG PLAYER ]
+│
+├ *Title:* ${song.title}
+├ *Duration:* ${song.duration}
+├ *Views:* ${song.views.toLocaleString()}
+├ *Published:* ${song.published}
+╰──────────────────◆\n\n
+> 𝐏𝐨𝐰𝐞𝐫𝐞𝐝 𝐛𝐲 𝐀𝐝𝐞𝐯𝐨𝐬-𝐗 𝐓𝐞𝐜𝐡
+`.trim();
+
+    // Tuma Thumbnail + Info
+    await King.sendMessage(from, {
+      image: { url: song.thumbnail },
+      caption
+    }, { quoted: m });
+
+    // Tuma Audio
+    await King.sendMessage(from, {
+      audio: { url: song.download_url },
+      mimetype: 'audio/mpeg',
+      fileName: `${song.title}.mp3`,
+      ptt: false
+    }, { quoted: m });
+
+    await new Promise(r => setTimeout(r, 1500));
+
+    // Pata na Tuma Video
+    const videoRes = await axios.get(
+      `https://apis.davidcyril.name.ng/download/ytmp4`,
+      { params: { url: video.url } }
+    );
+
+    if (videoRes.data?.success && videoRes.data?.result?.download_url) {
+      const result = videoRes.data.result;
+
+      await King.sendMessage(from, {
+        video: { url: result.download_url },
+        mimetype: 'video/mp4',
+        fileName: `${song.title}.mp4`,
+        caption: `🎬 *Title:* ${result.title}\n📽️ *Quality:* ${result.quality}`
+      }, { quoted: m });
+
+    } else {
+      await reply('⚠️ Audio imetumwa. Video haikupatikana.');
+    }
+
+    await King.sendMessage(from, { react: { text: '✅', key: m.key } });
+
+  } catch (err) {
+    console.error('SONG ERROR:', err);
+    await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+    reply('❌ Failed to fetch song. Try again later.');
+  }
+  break;
 }
         case 'ytmp4': {
   if (!usedWithPrefix(m, command, prefix)) return;
@@ -5859,19 +5835,25 @@ case 'song': {
     }
 
     try {
+        await King.sendMessage(from, { react: { text: '⏳', key: m.key } });
         reply('🔍 Fetching video, please wait...');
 
-        const apiUrl = `https://apis.prexzyvilla.site/download/ytmp4?url=${encodeURIComponent(text)}`;
-        const response = await axios.get(apiUrl, { timeout: 15000 });
+        // Tumia API ya davidcyril inayofanya kazi
+        const apiUrl = `https://apis.davidcyril.name.ng/download/ytmp4`;
+        const response = await axios.get(apiUrl, {
+            params: { url: text },
+            timeout: 60000
+        });
 
-        if (response.data && response.data.success) {
-            const { title, thumbnail, download_url } = response.data.result;
+        if (response.data?.success && response.data?.result?.download_url) {
+            const { title, thumbnail, download_url, quality } = response.data.result;
 
             await King.sendMessage(m.chat, {
                 image: { url: thumbnail },
                 caption:
                     `🎬 *Video Found!*\n\n` +
                     `📌 *Title:* ${title}\n` +
+                    `📽️ *Quality:* ${quality}\n` +
                     `🔗 *Link:* ${text}\n\n` +
                     `📥 Preparing your download...`
             }, { quoted: m });
@@ -5879,15 +5861,20 @@ case 'song': {
             await King.sendMessage(m.chat, {
                 video: { url: download_url },
                 mimetype: 'video/mp4',
-                caption: `🎬 *Title:* ${title}\n\n${footer}`
+                fileName: `${title}.mp4`,
+                caption: `🎬 *Title:* ${title}\n📽️ *Quality:* ${quality}\n\n${footer}`
             }, { quoted: m });
 
+            await King.sendMessage(from, { react: { text: '✅', key: m.key } });
+
         } else {
+            await King.sendMessage(from, { react: { text: '❌', key: m.key } });
             reply("❌ Couldn't fetch the video. Try again later.");
         }
 
     } catch (error) {
         console.error("ytmp4 error:", error.message || error);
+        await King.sendMessage(from, { react: { text: '❌', key: m.key } });
         reply("❌ An error occurred while fetching the video.");
     }
     break;
@@ -5895,16 +5882,14 @@ case 'song': {
 case 'play2': {
   if (!usedWithPrefix(m, command, prefix)) return;
     if (!text) {
-        return reply(`*Use:* ${prefix}play2 [song name ]\n\n*Example:* ${prefix}play2 faded alan walker`);
+        return reply(`*Use:* ${prefix}play2 [ song name ]\n\n*Example:* ${prefix}play2 faded alan walker`);
     }
 
     try {
-        // Send initial loading message
         let loadMsg = await King.sendMessage(m.chat, { 
-            text: "⏳ *Searching for the song…*"
+            text: "⏳ *Searching for the song...*"
         }, { quoted: m });
 
-        // Function to edit loading message
         const editLoad = async (newText) => {
             await King.sendMessage(m.chat, {
                 edit: loadMsg.key,
@@ -5912,62 +5897,53 @@ case 'play2': {
             });
         };
 
-        // 1️⃣ Searching YouTube
-        let ytsData = await yts(text);
-        let result = ytsData.videos[0];
-        if (!result) return editLoad("❌ *No results found!*");
+        await King.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        let urlYt = result.url;
-        let title = result.title;
+        await editLoad("🎶 *Fetching download link...*");
 
-        // Update loading
-        await editLoad("🎶 *Fetching download link…*");
+        // Tumia /play badala ya /youtube/mp3
+        const { data } = await axios.get(
+            `https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(text)}`
+        );
 
-        // 2️⃣ Fetch MP3 link
-        let apiUrl = `https://apis.davidcyril.name.ng/youtube/mp3?url=${urlYt}`;
-        let response = await axios.get(apiUrl);
-
-        if (!response.data.status) {
-            return editLoad("❌ *Failed to fetch MP3. API error.*");
+        if (!data.status || !data.result) {
+            await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return editLoad("❌ *Song not found. Try a different name.*");
         }
 
-        let downloadUrl = response.data.result.download_url;
+        const song = data.result;
 
-        // Update loading
-        await editLoad("📥 *Downloading audio…*");
+        await editLoad("📥 *Downloading audio...*");
+        await editLoad("📤 *Sending audio...*");
 
-        // 3️⃣ Sending audio file
-        await editLoad("📤 *Sending audio…*");
-      // Final edit
-        await editLoad("✅ *Downloaded successfully*");
         await King.sendMessage(m.chat, {
-            audio: { url: downloadUrl },
+            audio: { url: song.download_url },
             mimetype: "audio/mpeg",
-            fileName: `${title}.mp3`,
-            caption: `🎵 *${title}*\nDownloaded via *Play2*`
+            fileName: `${song.title}.mp3`,
+            ptt: false
         }, { quoted: m });
 
-  
+        await editLoad("✅ *Downloaded successfully!*");
+        await King.sendMessage(from, { react: { text: '✅', key: m.key } });
 
     } catch (e) {
         console.log(e);
+        await King.sendMessage(from, { react: { text: '❌', key: m.key } });
         return reply("❌ *Error occurred while processing play2.*");
     }
-}
-break;
-     case 'playdoc': {
+ }   
+  break;
+case 'playdoc': {
   if (!usedWithPrefix(m, command, prefix)) return;
     if (!text) {
         return reply(`*Use:* ${prefix}playdoc [ song name ]\n\n*Example:* ${prefix}playdoc faded alan walker`);
     }
 
     try {
-        // Initial loading
         let loadMsg = await King.sendMessage(m.chat, { 
-            text: "⏳ *Searching for the song…*"
+            text: "⏳ *Searching for the song...*"
         }, { quoted: m });
 
-        // Edit loading message function
         const editLoad = async (newText) => {
             await King.sendMessage(m.chat, {
                 edit: loadMsg.key,
@@ -5975,46 +5951,44 @@ break;
             });
         };
 
-        // 1️⃣ Search YouTube
-        let ytsData = await yts(text);
-        let result = ytsData.videos[0];
-        if (!result) return editLoad("❌ *No results found!*");
+        await King.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-        let urlYt = result.url;
-        let title = result.title;
+        // Search & fetch audio using working API
+        await editLoad("🎶 *Fetching download link...*");
 
-        await editLoad("🎶 *Fetching download link…*");
+        const { data } = await axios.get(
+            `https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(text)}`
+        );
 
-        // 2️⃣ Get MP3 download link
-        let apiUrl = `https://apis.davidcyril.name.ng/youtube/mp3?url=${urlYt}`;
-        let response = await axios.get(apiUrl);
-
-        if (!response.data.status) {
-            return editLoad("❌ *Failed to fetch MP3. API error.*");
+        if (!data.status || !data.result) {
+            await King.sendMessage(from, { react: { text: '❌', key: m.key } });
+            return editLoad("❌ *Song not found. Try a different name.*");
         }
 
-        let downloadUrl = response.data.result.download_url;
+        const song = data.result;
 
-        await editLoad("📥 *Downloading audio…*");
+        await editLoad("📥 *Downloading audio...*");
 
-        // 3️⃣ Send audio as DOCUMENT
-        await editLoad("📤 *Sending audio as document…*");
+        // Send as document
+        await editLoad("📤 *Sending audio as document...*");
 
         await King.sendMessage(m.chat, {
-            document: { url: downloadUrl },
+            document: { url: song.download_url },
             mimetype: "audio/mpeg",
-            fileName: `${title}.mp3`,
-            caption: `🎵 *${title}*\nSent as a *Document*`
+            fileName: `${song.title}.mp3`,
+            caption: `🎵 *${song.title}*\n⏱️ *Duration:* ${song.duration}\n👁️ *Views:* ${song.views.toLocaleString()}\n\nSent as a *Document*`
         }, { quoted: m });
 
         await editLoad("✅ *Downloaded as document!*");
+        await King.sendMessage(from, { react: { text: '✅', key: m.key } });
 
     } catch (err) {
         console.log(err);
+        await King.sendMessage(from, { react: { text: '❌', key: m.key } });
         return reply("❌ *Error processing playdoc.*");
     }
+  break;
 }
-break;
 case 'ibsbmg': {
   if (!q) return m.reply(`Use like: .img robin,3:4`);
 
@@ -6120,7 +6094,7 @@ case 'tagall': {
   if (!m.isGroup) return reply(msg.only.group);
 
   const textMessage = args.join(" ") || "No context";
-  let teks = `\`\`\` Tagging all members:\`\`\`\n> *${textMessage}*\n\n`;
+  let teks = `\`\`\` Tagging all members:\`\`\`\n *${textMessage}*\n\n`;
 
   const groupMetadata = await King.groupMetadata(m.chat);
   const participants = groupMetadata.participants;
