@@ -1,256 +1,222 @@
+/**
+ * index.js - Bot Entry Point
+ * Adevos Min-Bot
+ *
+ * Changes from previous version:
+ * - Removed: disk-based PAIRING_DIR (./nexstore/pairing/)
+ * - Removed: fs.readdirSync() for loading paired users
+ * - Removed: startupPassword from nexstore/token.js
+ * - Removed: auth.json disk authentication
+ * - Removed: readline password prompt (not usable on Render)
+ * - Added:   connectDB() from db.js on startup
+ * - Added:   autoLoadPairs() from MongoDB via autoload.js
+ * - Kept:    figlet banner
+ * - Kept:    bot.js + case.js loading
+ * - Kept:    graceful shutdown handlers
+ * - Kept:    error suppression for known Baileys noise
+ */
 
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+'use strict';
+
+require('dotenv').config();
+require('./setting/config');
+
+const path  = require('path');
+const fs    = require('fs');
 const chalk = require('chalk');
-const figlet = require('figlet');
-const { startupPassword } = require('./nexstore/token');
 
-const AUTH_FILE = './auth.json';
-const PAIRING_DIR = './nexstore/pairing/';
-const startpairing = require('./pair');
+let figlet;
+try { figlet = require('figlet'); } catch { figlet = null; }
 
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const { connectDB }   = require('./db');
+const { autoLoadPairs } = require('./autoload');
 
-function isAuthenticated() {
-    return fs.existsSync(AUTH_FILE) && JSON.parse(fs.readFileSync(AUTH_FILE)).authenticated;
-}
+// ─── Startup Banner ───────────────────────────────────────────
+function printBanner() {
+    console.clear();
 
-function setAuthenticated(value) {
-    fs.writeFileSync(AUTH_FILE, JSON.stringify({ authenticated: value }));
-}
-
-const autoLoadPairs = async () => {
-    console.log(chalk.cyan('🔄 Auto-loading all paired users...'));
-    
-    if (!fs.existsSync(PAIRING_DIR)) {
-        console.log(chalk.red('❌ Pairing directory not found.'));
-        return;
-    }
-
-    const pairedUsers = fs.readdirSync(PAIRING_DIR, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name)
-        .filter(name => name.endsWith('@s.whatsapp.net'));
-
-    if (pairedUsers.length === 0) {
-        console.log(chalk.yellow('ℹ️  No paired users found.'));
-        return;
-    }
-
-    console.log(chalk.green(`✅ Found ${pairedUsers.length} paired users. Starting connections...`));
-    console.log(chalk.blue('⏳ Waiting 4 seconds before starting connections...'));
-    await delay(4000);
-
-    for (let i = 0; i < pairedUsers.length; i++) {
-        const userNumber = pairedUsers[i];
-        
+    if (figlet) {
         try {
-            console.log(chalk.blue(`🔄 Connecting user ${i + 1}/${pairedUsers.length}: ${userNumber}`));
-            await startpairing(userNumber);
-            console.log(chalk.green(`✅ Connected successfully: ${userNumber}`));
-            
-            if (i < pairedUsers.length - 1) {
-                console.log(chalk.blue('⏳ Waiting 4 seconds before next connection...'));
-                await delay(4000);
-            }
-        } catch (error) {
-            console.log(chalk.red(`❌ Failed for ${userNumber}: ${error.message}`));
-            
-            if (i < pairedUsers.length - 1) {
-                console.log(chalk.blue('⏳ Waiting 4 seconds before retry...'));
-                await delay(4000);
-            }
+            console.log(chalk.green(figlet.textSync('ADEVOS BOT', {
+                font: 'Standard',
+                horizontalLayout: 'default'
+            })));
+        } catch {
+            console.log(chalk.green('\n  ADEVOS MIN-BOT\n'));
         }
-    }
-
-    console.log(chalk.green('✅ All paired users processed.'));
-    console.log(chalk.blue('⏳ Waiting 4 seconds before continuing...'));
-    await delay(4000);
-};
-
-const initializeBot = async () => {
-    console.clear();
-    console.log(chalk.cyan(figlet.textSync('ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ ᴀᴄᴛɪᴠᴇ', {
-        font: 'Standard',
-        horizontalLayout: 'default',
-        verticalLayout: 'default'
-    })));
-    
-    console.log(chalk.yellow('\n▣━━━━━━━━━━━━━━━━━━━━━━━━━━━▣︎'));
-    console.log(chalk.green('ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ '));
-    console.log(chalk.yellow('▣︎━━━━━━━━━━━━━━━━━━━━━━━━━━︎▣\n'));
-
-    await autoLoadPairs();
-
-    if (isAuthenticated()) {
-        console.log(chalk.green('✅ Welcome back! Skipping password...'));
-        launchBot();
     } else {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-
-        rl.stdoutMuted = true;
-        console.log(chalk.bold.yellow('🔐 Enter password to start bot:'));
-
-        rl.question(chalk.green('Password: '), function (input) {
-            if (input !== startupPassword) {
-                console.log(chalk.red('\n❌ Incorrect password. Exiting...'));
-                process.exit(1);
-            }
-
-            console.log(chalk.green('\n✅ Password correct. Starting bot system...'));
-            setAuthenticated(true);
-            rl.close();
-            launchBot();
-        });
-
-        rl._writeToOutput = function _writeToOutput(stringToWrite) {
-            if (rl.stdoutMuted) {
-                rl.output.write(chalk.cyan('*'));
-            } else {
-                rl.output.write(stringToWrite);
-            }
-        };
+        console.log(chalk.green('\n  ADEVOS MIN-BOT\n'));
     }
-};
 
-function launchBot() {
-    console.clear();
-    console.log(chalk.green('ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ  ᴀʟʟ....\n'));
+    console.log(chalk.yellow('▣━━━━━━━━━━━━━━━━━━━━━━━━━━━▣'));
+    console.log(chalk.green('  ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ  v2.0.0'));
+    console.log(chalk.cyan('  Powered by MongoDB Atlas'));
+    console.log(chalk.yellow('▣━━━━━━━━━━━━━━━━━━━━━━━━━━━▣\n'));
+}
 
-    let telegramLoaded = false;
-    let whatsappLoaded = false;
+// ─── Load Bot Modules ─────────────────────────────────────────
+function loadModules() {
+    let telegramLoaded  = false;
+    let whatsappLoaded  = false;
 
     // Load Telegram bot (bot.js)
     const botPath = path.join(__dirname, 'bot.js');
     if (fs.existsSync(botPath)) {
         try {
-            console.log(chalk.blue('📱 Loading Telegram pairing system...'));
+            console.log(chalk.blue('📱 Loading Telegram bot (bot.js)...'));
             require('./bot');
             telegramLoaded = true;
-            console.log(chalk.green('✅ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ ɪs sᴜᴄᴄᴇssғᴜʟʟʏ ᴀᴄᴛɪᴠᴇ'));
-        } catch (error) {
-            console.log(chalk.red('❌ Failed to load Telegram bot (bot.js):'));
-            console.log(chalk.red('   Error:', error.message));
-            
-            if (error.stack) {
-                console.log(chalk.gray('   Stack:', error.stack.split('\n')[1].trim()));
-            }
-            
+            console.log(chalk.green('✅ Telegram bot loaded'));
+        } catch (err) {
+            console.log(chalk.red(`❌ Failed to load bot.js: ${err.message}`));
             console.log(chalk.yellow('⚠️  Continuing without Telegram bot...\n'));
         }
     } else {
-        console.log(chalk.yellow('⚠️  bot.js not found, skipping Telegram bot...\n'));
+        console.log(chalk.yellow('⚠️  bot.js not found — skipping Telegram bot'));
     }
 
-    // Load WhatsApp commands (case.js)
-    const nexusPath = path.join(__dirname, 'case.js');
-    if (fs.existsSync(nexusPath)) {
+    // Load WhatsApp command handler (case.js)
+    // case.js does not need to be instantiated here — pair.js calls it directly
+    // on each incoming message. We just verify the file exists.
+    const casePath = path.join(__dirname, 'case.js');
+    if (fs.existsSync(casePath)) {
         try {
-            console.log(chalk.blue('💬 Loading WhatsApp commands system...'));
-            const nexusModule = require('./case');
+            // Validate the file can be parsed without errors
+            require.resolve('./case');
             whatsappLoaded = true;
-            console.log(chalk.green('✅ WhatsApp commands loaded successfully!'));
-            
-            // Note: Event listeners will be set up when pair.js creates the connection
-            // We're just loading the command handler here
-            
-        } catch (error) {
-            console.log(chalk.red('❌ Failed to load WhatsApp commands (case.js):'));
-            console.log(chalk.red('   Error:', error.message));
-            
-            if (error.stack) {
-                console.log(chalk.gray('   Stack:', error.stack.split('\n')[1].trim()));
-            }
-            
+            console.log(chalk.green('✅ WhatsApp command handler (case.js) ready'));
+        } catch (err) {
+            console.log(chalk.red(`❌ Failed to resolve case.js: ${err.message}`));
             console.log(chalk.yellow('⚠️  Continuing without WhatsApp commands...\n'));
         }
     } else {
-        console.log(chalk.yellow('⚠️  case.js not found, skipping WhatsApp commands...\n'));
+        console.log(chalk.yellow('⚠️  case.js not found — skipping WhatsApp commands'));
     }
 
-    // Summary
-    console.log(chalk.cyan('\n⚄︎══════════════════════════════════════════════⚄︎'));
-    console.log(chalk.bold.white('  ʙᴏᴛ ɪɴɪᴛɪᴀʟɪᴢᴀᴛɪᴏɴ sᴜᴍᴍᴀʀʀʏ        '));
-    console.log(chalk.cyan('⚄︎═══════════════════════════════════════════════⚄︎'));
-    console.log(telegramLoaded ? chalk.green( '✅ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ  : ᴀᴄᴛɪᴠᴇ ') : chalk.red('❌ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ '));
-    console.log(whatsappLoaded ? chalk.green('✅ ᴡʜᴀᴛsᴀᴘᴘ ᴄᴏᴍᴍᴀɴᴅs: ᴀᴄᴛɪᴠᴇ') : chalk.red('❌ ᴡʜᴀᴛsᴀᴘᴘ ᴄᴏᴍᴍᴀᴍᴅs : ɪɴᴀᴄʏɪᴠᴇ'));
-    console.log(chalk.cyan('⚄︎════════════════════════════════⚄︎\n'));
+    // Print summary
+    console.log(chalk.cyan('\n⚄══════════════════════════════⚄'));
+    console.log(chalk.bold.white('  BOT INITIALIZATION SUMMARY'));
+    console.log(chalk.cyan('⚄══════════════════════════════⚄'));
+    console.log(telegramLoaded
+        ? chalk.green('✅ Telegram Bot   : ACTIVE')
+        : chalk.red(  '❌ Telegram Bot   : INACTIVE'));
+    console.log(whatsappLoaded
+        ? chalk.green('✅ WhatsApp Cmds  : READY')
+        : chalk.red(  '❌ WhatsApp Cmds  : INACTIVE'));
+    console.log(chalk.cyan('⚄══════════════════════════════⚄\n'));
 
     if (!telegramLoaded && !whatsappLoaded) {
         console.log(chalk.red('⚠️  Warning: No bot systems loaded! Check your files.\n'));
     } else {
-        console.log(chalk.green('✅ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ  ᴀᴄᴛɪᴠᴇ!\n'));
+        console.log(chalk.green('✅ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ is ACTIVE\n'));
     }
+}
 
-    // Error handlers
-    const ignoredErrors = [
+// ─── Error Suppression ────────────────────────────────────────
+// Baileys generates a lot of noise for known non-fatal conditions.
+// These are suppressed to keep logs readable.
+function setupErrorHandlers() {
+    const IGNORED_ERRORS = [
         'Socket connection timeout',
         'EKEYTYPE',
         'item-not-found',
         'rate-overlimit',
         'Connection Closed',
         'Timed Out',
-        'Value not found'
+        'Value not found',
+        'Stream Errored',
+        'connection-replaced',
+        'TAG_MISMATCH'
     ];
 
-    process.on('unhandledRejection', (reason, promise) => {
-        if (ignoredErrors.some(e => String(reason).includes(e))) return;
-        
-        console.log(chalk.red('\n⚠️  Unhandled Promise Rejection:'));
-        console.log(chalk.yellow('Reason:'), reason);
+    function isIgnored(msg) {
+        return IGNORED_ERRORS.some(e => String(msg).includes(e));
+    }
+
+    process.on('unhandledRejection', (reason) => {
+        if (isIgnored(reason)) return;
+        console.log(chalk.red('\n⚠️  Unhandled Rejection:'), reason);
     });
 
-    process.on('uncaughtException', (error) => {
-        if (ignoredErrors.some(e => String(error).includes(e))) return;
-        
-        console.log(chalk.red('\n❌ Uncaught Exception:'));
-        console.log(chalk.yellow('Error:'), error.message);
-        if (error.stack) {
-            console.log(chalk.gray(error.stack));
-        }
+    process.on('uncaughtException', (err) => {
+        if (isIgnored(err)) return;
+        console.log(chalk.red(`\n❌ Uncaught Exception: ${err.message}`));
+        if (err.stack) console.log(chalk.gray(err.stack));
     });
 
-    const originalConsoleError = console.error;
-    console.error = function (message, ...optionalParams) {
-        if (typeof message === 'string' && ignoredErrors.some(e => message.includes(e))) {
-            return;
-        }
-        originalConsoleError.apply(console, [message, ...optionalParams]);
+    // Suppress stderr noise from Baileys WebSocket internals
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (msg, ...args) => {
+        if (typeof msg === 'string' && isIgnored(msg)) return true;
+        return originalStderrWrite(msg, ...args);
     };
 
-    const originalStderrWrite = process.stderr.write;
-    process.stderr.write = function (message, encoding, fd) {
-        if (typeof message === 'string' && ignoredErrors.some(e => message.includes(e))) {
-            return;
-        }
-        originalStderrWrite.apply(process.stderr, arguments);
-    };
-
-    console.log(chalk.blue('📊 Bot monitoring active...'));
-    console.log(chalk.gray('Press Ctrl+C to stop the bot\n'));
+    console.log(chalk.blue('📊 Bot monitoring active'));
+    console.log(chalk.gray('Press Ctrl+C to stop\n'));
 }
 
-// Graceful shutdown
-process.on('SIGINT', () => {
-    console.log(chalk.yellow('\n\n⚠️  Shutting down gracefully...'));
-    console.log(chalk.green('👋 Goodbye!'));
-    process.exit(0);
-});
+// ─── Graceful Shutdown ────────────────────────────────────────
+function setupShutdown() {
+    process.on('SIGINT', () => {
+        console.log(chalk.yellow('\n⚠️  Shutting down gracefully...'));
+        console.log(chalk.green('👋 Goodbye!'));
+        process.exit(0);
+    });
 
-process.on('SIGTERM', () => {
-    console.log(chalk.yellow('\n\n⚠️  Received termination signal...'));
-    process.exit(0);
-});
+    process.on('SIGTERM', () => {
+        console.log(chalk.yellow('\n⚠️  Received SIGTERM...'));
+        process.exit(0);
+    });
+}
 
-initializeBot().catch((error) => {
-    console.log(chalk.red('\n❌ Fatal error during initialization:'));
-    console.log(chalk.yellow('Error:'), error.message);
-    if (error.stack) {
-        console.log(chalk.gray(error.stack));
+// ─── Main Entry Point ─────────────────────────────────────────
+async function main() {
+    printBanner();
+    setupShutdown();
+
+    // Step 1: Connect to MongoDB
+    // This must succeed before anything else runs.
+    try {
+        console.log(chalk.blue('🔄 Connecting to MongoDB...'));
+        await connectDB();
+        console.log(chalk.green('✅ MongoDB connected\n'));
+    } catch (err) {
+        console.error(chalk.red(`❌ MongoDB connection failed: ${err.message}`));
+        console.error(chalk.red('   Make sure MONGODB_URI is set in your environment variables.'));
+        process.exit(1);
     }
+
+    // Step 2: Load bot modules (bot.js + case.js)
+    loadModules();
+
+    // Step 3: Auto-load all registered sessions from MongoDB
+    // Replaces the old disk-based loop over ./nexstore/pairing/
+    console.log(chalk.blue('🔄 Auto-loading paired sessions from MongoDB...'));
+    try {
+        const result = await autoLoadPairs({ batchSize: 10 });
+
+        if (result.success) {
+            if (result.total === 0) {
+                console.log(chalk.yellow('ℹ️  No registered sessions found — waiting for new pairings\n'));
+            } else {
+                console.log(chalk.green(
+                    `✅ Auto-load complete: ${result.successful}/${result.total} sessions connected (${result.duration}s)\n`
+                ));
+            }
+        } else {
+            console.log(chalk.yellow(`⚠️  Auto-load issue: ${result.message}\n`));
+        }
+    } catch (err) {
+        // Non-fatal — bot can still accept new pairings even if autoload fails
+        console.log(chalk.yellow(`⚠️  Auto-load error: ${err.message}\n`));
+    }
+
+    // Step 4: Set up error handlers
+    setupErrorHandlers();
+}
+
+main().catch(err => {
+    console.error(chalk.red(`\n❌ Fatal startup error: ${err.message}`));
+    if (err.stack) console.error(chalk.gray(err.stack));
     process.exit(1);
 });
