@@ -25,9 +25,18 @@ const {
     getContentType,
     proto,
     downloadContentFromMessage,
-    fetchLatestBaileysVersion,
-    makeInMemoryStore
+    fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
+
+// makeInMemoryStore was removed from default exports in newer Baileys versions.
+// Import it separately and fall back to null if unavailable.
+let makeInMemoryStore = null;
+try {
+    const baileys = require('@whiskeysockets/baileys');
+    if (typeof baileys.makeInMemoryStore === 'function') {
+        makeInMemoryStore = baileys.makeInMemoryStore;
+    }
+} catch {}
 
 const pino     = require('pino');
 const chalk    = require('chalk');
@@ -138,8 +147,11 @@ async function _startPairing(sessionId) {
     const { version }           = await fetchLatestBaileysVersion();
     const { state, saveCreds }  = await useMongoAuthState(sessionId);
 
-    // In-memory message store (for quoting, downloading, etc.)
-    const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) });
+    // In-memory message store — only created if makeInMemoryStore is available.
+    // Newer Baileys versions removed it; we fall back to a lightweight no-op.
+    const store = makeInMemoryStore
+        ? makeInMemoryStore({ logger: pino({ level: 'silent' }) })
+        : { loadMessage: async () => null, bind: () => {} };
 
     // ─── Create Socket ────────────────────────────────────────
     const sock = makeWASocket({
@@ -155,12 +167,16 @@ async function _startPairing(sessionId) {
         syncFullHistory:     false,   // Keep memory usage low
         markOnlineOnConnect: true,
         getMessage: async key => {
-            const msg = await store.loadMessage(key.remoteJid, key.id);
-            return msg?.message || '';
+            try {
+                const msg = await store.loadMessage(key.remoteJid, key.id);
+                return msg?.message || '';
+            } catch {
+                return '';
+            }
         }
     });
 
-    store.bind(sock.ev);
+    if (typeof store.bind === 'function') store.bind(sock.ev);
     tracker.socket = sock;
 
     // ─── Request Pairing Code ─────────────────────────────────
