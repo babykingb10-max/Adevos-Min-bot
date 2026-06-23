@@ -734,6 +734,39 @@ process.once('SIGINT',  () => gracefulShutdown('SIGINT'));
 process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('message',   (msg) => { if (msg === 'shutdown') gracefulShutdown('PM2'); });
 
+// ─── HTTP Health Check Server ─────────────────────────────────
+// Render requires a web service to bind to a port.
+// This lightweight server satisfies that requirement
+// while the real work is done by the Telegram polling bot.
+const http = require('http');
+
+const healthServer = http.createServer(async (req, res) => {
+    const url = req.url;
+
+    // Basic health check
+    if (url === '/health' || url === '/') {
+        const { getSessionStats } = require('./db');
+        const stats = await getSessionStats().catch(() => ({ total: 0, active: 0 }));
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            status:     'ok',
+            bot:        'running',
+            server:     SERVER_NAME,
+            uptime:     Math.floor(process.uptime()),
+            sessions:   stats.total,
+            active:     stats.active,
+            maxConn:    MAX_CONN,
+            timestamp:  new Date().toISOString()
+        }));
+        return;
+    }
+
+    // 404 for everything else
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'not found' }));
+});
+
 // ─── Initialize ───────────────────────────────────────────────
 
 (async () => {
@@ -743,6 +776,13 @@ process.on('message',   (msg) => { if (msg === 'shutdown') gracefulShutdown('PM2
         console.log(chalk.magenta(`🤖 Telegram bot running — ${SERVER_NAME}`));
         console.log(chalk.blue(`👮 Admins: ${ADMIN_IDS.join(', ') || 'none configured'}`));
         console.log(chalk.cyan(`📊 Max connections: ${MAX_CONN}`));
+
+        // Start health check server on PORT (required by Render)
+        const PORT_HTTP = parseInt(process.env.PORT || '3000');
+        healthServer.listen(PORT_HTTP, () => {
+            console.log(chalk.green(`🌐 Health server listening on port ${PORT_HTTP}`));
+        });
+
     } catch (err) {
         console.error(chalk.red(`❌ Startup failed: ${err.message}`));
         process.exit(1);
