@@ -31,10 +31,14 @@ const {
 // makeInMemoryStore was removed from default exports in newer Baileys versions.
 // Import it separately and fall back to null if unavailable.
 let makeInMemoryStore = null;
+let initAuthCreds     = null;
 try {
     const baileys = require('@whiskeysockets/baileys');
     if (typeof baileys.makeInMemoryStore === 'function') {
         makeInMemoryStore = baileys.makeInMemoryStore;
+    }
+    if (typeof baileys.initAuthCreds === 'function') {
+        initAuthCreds = baileys.initAuthCreds;
     }
 } catch {}
 
@@ -146,6 +150,14 @@ async function _startPairing(sessionId) {
 
     const { version }           = await fetchLatestBaileysVersion();
     const { state, saveCreds }  = await useMongoAuthState(sessionId);
+
+    // Ensure creds is never null — Baileys crashes if state.creds is null.
+    // initAuthCreds() generates a fresh credential object for new sessions.
+    if (!state.creds && initAuthCreds) {
+        state.creds = initAuthCreds();
+    } else if (!state.creds) {
+        state.creds = {};
+    }
 
     // In-memory message store — only created if makeInMemoryStore is available.
     // Newer Baileys versions removed it; we fall back to a lightweight no-op.
