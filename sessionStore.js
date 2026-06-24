@@ -14,6 +14,16 @@
 const chalk = require('chalk');
 const { Session } = require('./db');
 
+// initAuthCreds generates a fresh credential set for new sessions.
+// Required by Baileys when no existing creds are found in the database.
+let initAuthCreds;
+try {
+    initAuthCreds = require('@whiskeysockets/baileys').initAuthCreds;
+} catch {
+    // Fallback if not available — Baileys will handle it internally
+    initAuthCreds = () => ({});
+}
+
 // ─── RAM Cache ────────────────────────────────────────────────
 // Short-lived cache to reduce MongoDB reads for hot sessions.
 // Each entry expires after CACHE_TTL_MS milliseconds.
@@ -178,7 +188,7 @@ async function useMongoAuthState(sessionId) {
     const sessionDoc = await getSession(sessionId);
 
     const state = {
-        creds: sessionDoc?.creds || null,
+        creds: sessionDoc?.creds || initAuthCreds(),
         keys: {
             /**
              * Retrieve signal keys of a given type for a list of IDs.
