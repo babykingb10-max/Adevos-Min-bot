@@ -15,6 +15,10 @@
 
 'use strict';
 
+// Initialize globals expected by case.js
+global.mek  = null;
+global.King = null;
+
 require('dotenv').config();
 
 const {
@@ -254,6 +258,12 @@ async function _startPairing(sessionId) {
 
             // case.js is not modified - passes through as-is
             const mek = smsg(sock, msg, store);
+
+            // case.js uses 'mek' and 'King' (socket) as global variables (legacy pattern).
+            // Set them globally so case.js works without modification.
+            global.mek  = mek;
+            global.King = sock;
+
             require('./case')(sock, mek, chatUpdate, store);
 
         } catch (err) {
