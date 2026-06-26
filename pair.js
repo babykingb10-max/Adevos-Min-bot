@@ -156,18 +156,31 @@ async function _startPairing(sessionId) {
     const { state, saveCreds }  = await useMongoAuthState(sessionId);
 
     // Ensure creds is never null — Baileys crashes if state.creds is null.
-    // initAuthCreds() generates a fresh credential object for new sessions.
     if (!state.creds && initAuthCreds) {
         state.creds = initAuthCreds();
     } else if (!state.creds) {
         state.creds = {};
     }
 
+    // If this is a fresh pairing (not registered yet) and we have stale keys
+    // from a previous failed attempt, clear them to prevent NaN size errors.
+    // Stale signal keys from incomplete sessions cause Baileys frame size = NaN.
+    if (!state.creds?.registered && state.keys && Object.keys(state.keys).length > 0) {
+        console.log(chalk.yellow(`🧹 Clearing stale signal keys for fresh pair: ${sessionId}`));
+        try {
+            const { saveSession } = require('./sessionStore');
+            await saveSession(sessionId, { keys: {} });
+            state.keys = {};
+        } catch (e) {
+            console.error(chalk.red(`❌ Could not clear stale keys: ${e.message}`));
+        }
+    }
+
     // In-memory message store — only created if makeInMemoryStore is available.
     // Newer Baileys versions removed it; we fall back to a lightweight no-op.
     const store = makeInMemoryStore
         ? makeInMemoryStore({ logger: pino({ level: 'silent' }) })
-        : { loadMessage: async () => null, bind: () => {} };
+        : { loadMessage: async () => undefined, bind: () => {} };
 
     // ─── Create Socket ────────────────────────────────────────
     const sock = makeWASocket({
@@ -180,19 +193,21 @@ async function _startPairing(sessionId) {
         defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
         emitOwnEvents:       true,
-        syncFullHistory:     false,   // Keep memory usage low
+        syncFullHistory:     false,
         markOnlineOnConnect: true,
-        getMessage: async key => {
+        // Return undefined (not null) so Baileys skips size calculation safely
+        getMessage: async (key) => {
             try {
+                if (!store || !store.loadMessage) return undefined;
                 const msg = await store.loadMessage(key.remoteJid, key.id);
-                return msg?.message || '';
+                return msg?.message || undefined;
             } catch {
-                return '';
+                return undefined;
             }
         }
     });
 
-    if (typeof store.bind === 'function') store.bind(sock.ev);
+    if (store && typeof store.bind === 'function') store.bind(sock.ev);
     tracker.socket = sock;
 
     // ─── Request Pairing Code ─────────────────────────────────
@@ -201,6 +216,15 @@ async function _startPairing(sessionId) {
 
         setTimeout(async () => {
             try {
+                // Validate phoneNumber before calling requestPairingCode
+                // NaN error occurs when phoneNumber is empty or not a valid number
+                if (!phoneNumber || isNaN(Number(phoneNumber)) || phoneNumber.length < 7) {
+                    console.error(chalk.red(`❌ Invalid phone number: ${phoneNumber} from sessionId: ${sessionId}`));
+                    return;
+                }
+
+                console.log(chalk.blue(`📱 Requesting pairing code for: ${phoneNumber}`));
+
                 let code = await sock.requestPairingCode(phoneNumber);
                 code     = code?.match(/.{1,4}/g)?.join('-') || code;
 
@@ -208,11 +232,24 @@ async function _startPairing(sessionId) {
                     `📱 Pairing code for ${phoneNumber}: ${chalk.white.bold(code)}`
                 ));
 
-                // Save to MongoDB (replaces Firebase + pairing.json)
+                // Save to MongoDB
                 await savePairingCode(phoneNumber, code, 'telegram');
 
             } catch (err) {
                 console.error(chalk.red(`❌ Pairing code error [${phoneNumber}]: ${err.message}`));
+
+                // If NaN size error occurs during pairing, clear stale session keys
+                // and retry once with clean state
+                if (err.message && err.message.includes('out of range')) {
+                    console.log(chalk.yellow(`🔄 NaN size error detected — clearing stale session keys for ${sessionId}`));
+                    try {
+                        const { saveSession } = require('./sessionStore');
+                        await saveSession(sessionId, { keys: {}, creds: state.creds });
+                        console.log(chalk.green(`✅ Stale keys cleared for ${sessionId}`));
+                    } catch (clearErr) {
+                        console.error(chalk.red(`❌ Failed to clear keys: ${clearErr.message}`));
+                    }
+                }
             }
         }, 3000);
     }
@@ -283,26 +320,50 @@ async function _startPairing(sessionId) {
 async function _handleDisconnect(sessionId, statusCode, tracker) {
     const DR = DisconnectReason;
 
-    // Fatal errors - delete session, do not retry
-    if ([405, DR.loggedOut, DR.badSession].includes(statusCode)) {
-        const reason = statusCode === 405
-            ? 'Error 405 (banned/replaced)'
-            : statusCode === DR.loggedOut
-                ? 'Logged out'
-                : 'Bad session';
+    console.log(chalk.yellow(`🔌 Disconnect reason code: ${statusCode} for ${sessionId}`));
+
+    // Fatal errors — delete session completely, do not retry
+    const FATAL_CODES = [
+        405,
+        DR.loggedOut,
+        DR.badSession,
+        DR.forbidden
+    ];
+
+    if (FATAL_CODES.includes(statusCode)) {
+        const reasons = {
+            405:             'Error 405 (banned/replaced)',
+            [DR.loggedOut]:  'Logged out by user',
+            [DR.badSession]: 'Bad session data',
+            [DR.forbidden]:  'Forbidden'
+        };
+        const reason = reasons[statusCode] || `Fatal error (${statusCode})`;
 
         console.log(chalk.red(`❌ ${reason} — deleting session: ${sessionId}`));
+
+        // Mark as inactive AND unregistered in MongoDB
+        await setSessionActive(sessionId, false);
         await deleteSession(sessionId);
         connectionTracker.delete(sessionId);
         return;
     }
 
-    // Retriable errors - exponential backoff up to 5 attempts
+    // Stream errors (515, 503) and connection drops — retry with backoff
+    const RETRIABLE_CODES = [
+        515,  // Stream error (the NaN error appears with this code)
+        503,  // Service unavailable
+        DisconnectReason.connectionClosed,
+        DisconnectReason.connectionLost,
+        DisconnectReason.connectionReplaced,
+        DisconnectReason.timedOut,
+        DisconnectReason.restartRequired
+    ];
+
     const MAX_RETRIES = 5;
     if (tracker.retryCount < MAX_RETRIES) {
         const delay = Math.min(3000 * tracker.retryCount, 30000);
         console.log(chalk.yellow(
-            `🔄 Reconnecting ${sessionId} in ${delay / 1000}s (${tracker.retryCount}/${MAX_RETRIES})`
+            `🔄 Reconnecting ${sessionId} in ${delay / 1000}s (attempt ${tracker.retryCount}/${MAX_RETRIES})`
         ));
 
         setTimeout(() => {
@@ -312,6 +373,8 @@ async function _handleDisconnect(sessionId, statusCode, tracker) {
         }, delay);
     } else {
         console.error(chalk.red(`❌ Max retries reached: ${sessionId}`));
+        // Mark inactive but keep session in MongoDB (user can reconnect via /autoload)
+        await setSessionActive(sessionId, false);
         connectionTracker.delete(sessionId);
     }
 }
@@ -367,16 +430,27 @@ function _extendSocket(sock, store) {
         );
 
     sock.getFile = async (PATH, save) => {
-        let data = Buffer.isBuffer(PATH)                          ? PATH
-            : /^data:.*?\/.*?;base64,/i.test(PATH)              ? Buffer.from(PATH.split(',')[1], 'base64')
-            : /^https?:\/\//.test(PATH)                          ? await getBuffer(PATH)
-            : fs.existsSync(PATH)                                ? fs.readFileSync(PATH)
-            : Buffer.alloc(0);
+        try {
+            if (!PATH) return { filename: '', size: 0, mime: 'application/octet-stream', ext: '.bin', data: Buffer.alloc(0) };
 
-        const type     = await FileType.fromBuffer(data) || { mime: 'application/octet-stream', ext: '.bin' };
-        const filename = path.join(__dirname, 'src', `${Date.now()}.${type.ext}`);
-        if (data && save) { if (!fs.existsSync(path.dirname(filename))) fs.mkdirSync(path.dirname(filename), { recursive: true }); fs.writeFileSync(filename, data); }
-        return { filename, size: await getSizeMedia(data), ...type, data };
+            let data = Buffer.isBuffer(PATH)                          ? PATH
+                : /^data:.*?\/.*?;base64,/i.test(PATH)              ? Buffer.from(PATH.split(',')[1], 'base64')
+                : /^https?:\/\//.test(PATH)                          ? await getBuffer(PATH)
+                : fs.existsSync(PATH)                                ? fs.readFileSync(PATH)
+                : Buffer.alloc(0);
+
+            const type     = await FileType.fromBuffer(data) || { mime: 'application/octet-stream', ext: '.bin' };
+            const filename = path.join(__dirname, 'src', `${Date.now()}.${type.ext}`);
+            if (data && save) {
+                if (!fs.existsSync(path.dirname(filename))) fs.mkdirSync(path.dirname(filename), { recursive: true });
+                fs.writeFileSync(filename, data);
+            }
+            const size = data ? data.length : 0;  // Use buffer length directly, avoid NaN
+            return { filename, size, ...type, data };
+        } catch (err) {
+            console.error('getFile error:', err.message);
+            return { filename: '', size: 0, mime: 'application/octet-stream', ext: '.bin', data: Buffer.alloc(0) };
+        }
     };
 
     sock.downloadMediaMessage = async (message) => {
