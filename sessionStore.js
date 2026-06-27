@@ -23,6 +23,79 @@ try {
     // Fallback if not available — Baileys will handle it internally
     initAuthCreds = () => ({});
 }
+// ─── Buffer Serialization Helpers ────────────────────────────
+// MongoDB stores Buffer objects as {type:'Buffer', data:[...]} plain objects.
+// Baileys expects actual Buffer/Uint8Array instances.
+// These helpers convert between the two formats.
+
+/**
+ * Recursively restore Buffer objects that MongoDB deserialized
+ * as plain {type:'Buffer', data:[...]} objects.
+ * Also handles nested objects and arrays.
+ */
+function fixBuffers(obj) {
+    if (obj === null || obj === undefined) return obj;
+
+    // Direct Buffer object serialized by MongoDB
+    if (obj && obj.type === 'Buffer' && Array.isArray(obj.data)) {
+        return Buffer.from(obj.data);
+    }
+
+    // Uint8Array-like: has numeric keys and a length
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        // Check if it looks like a serialized Uint8Array
+        if (typeof obj.length === 'number' && obj[0] !== undefined) {
+            try {
+                return Buffer.from(Object.values(obj));
+            } catch {}
+        }
+
+        // Recurse into plain objects
+        const fixed = {};
+        for (const [k, v] of Object.entries(obj)) {
+            fixed[k] = fixBuffers(v);
+        }
+        return fixed;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(fixBuffers);
+    }
+
+    return obj;
+}
+
+/**
+ * Prepare a value for storage in MongoDB.
+ * Converts Buffer/Uint8Array to plain objects that survive JSON round-trips.
+ */
+function serializeValue(val) {
+    if (val === null || val === undefined) return val;
+
+    if (Buffer.isBuffer(val)) {
+        return { type: 'Buffer', data: Array.from(val) };
+    }
+
+    if (val instanceof Uint8Array) {
+        return { type: 'Buffer', data: Array.from(val) };
+    }
+
+    if (Array.isArray(val)) {
+        return val.map(serializeValue);
+    }
+
+    if (val && typeof val === 'object') {
+        const result = {};
+        for (const [k, v] of Object.entries(val)) {
+            result[k] = serializeValue(v);
+        }
+        return result;
+    }
+
+    return val;
+}
+
+
 
 // ─── RAM Cache ────────────────────────────────────────────────
 // Short-lived cache to reduce MongoDB reads for hot sessions.
@@ -188,7 +261,7 @@ async function useMongoAuthState(sessionId) {
     const sessionDoc = await getSession(sessionId);
 
     const state = {
-        creds: sessionDoc?.creds || initAuthCreds(),
+        creds: sessionDoc?.creds ? fixBuffers(sessionDoc.creds) : initAuthCreds(),
         keys: {
             /**
              * Retrieve signal keys of a given type for a list of IDs.
@@ -201,8 +274,11 @@ async function useMongoAuthState(sessionId) {
                     const result  = {};
 
                     for (const id of ids) {
-                        if (keyData[id] !== undefined && keyData[id] !== null) {
-                            result[id] = keyData[id];
+                        const val = keyData[id];
+                        if (val !== undefined && val !== null) {
+                            // Restore Buffer objects that MongoDB serialized
+                            // as {type:'Buffer', data:[...]} plain objects
+                            result[id] = fixBuffers(val);
                         }
                     }
                     return result;
@@ -226,7 +302,7 @@ async function useMongoAuthState(sessionId) {
 
                         for (const [id, value] of Object.entries(typeData)) {
                             if (value !== null && value !== undefined) {
-                                updatedKeys[type][id] = value;
+                                updatedKeys[type][id] = serializeValue(value);
                             } else {
                                 delete updatedKeys[type][id];
                             }
@@ -252,8 +328,11 @@ async function useMongoAuthState(sessionId) {
      */
     const saveCreds = async () => {
         try {
+            // Serialize creds before saving — converts Buffers to plain objects
+            // so MongoDB can store them and they survive JSON round-trips
+            const serializedCreds = serializeValue(state.creds);
             await saveSession(sessionId, {
-                creds:        state.creds,
+                creds:        serializedCreds,
                 isRegistered: !!(state.creds?.registered),
                 isActive:     true
             });
