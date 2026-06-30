@@ -268,6 +268,10 @@ async function _startPairing(sessionId) {
             await _updateServerStats();
             await _autoJoin(sock);
 
+            // Restore saved bot mode (public/private) from MongoDB.
+            // Prevents mode from resetting to public after every restart.
+            await _restoreBotMode(sock, sessionId);
+
         } else if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
             console.log(chalk.yellow(`🔌 Disconnected: ${sessionId} [${statusCode}]`));
@@ -379,6 +383,27 @@ async function _handleDisconnect(sessionId, statusCode, tracker) {
     }
 }
 
+// ─── Restore Bot Mode ────────────────────────────────────────
+/**
+ * Reads saved bot mode from MongoDB and applies it to the socket.
+ * This ensures .private / .public settings survive restarts.
+ */
+async function _restoreBotMode(sock, sessionId) {
+    try {
+        const { getSetting } = require('./setting/Settings');
+        const botJid = sessionId; // use sessionId as key for bot-level settings
+        const savedMode = getSetting(botJid, 'mode', 'public');
+        sock.public = (savedMode !== 'self' && savedMode !== 'private');
+        console.log(chalk.blue(
+            `⚙️  Bot mode restored: ${sock.public ? 'Public' : 'Private'} for ${sessionId}`
+        ));
+    } catch (err) {
+        // Settings module may not be available — default to public
+        console.log(chalk.yellow(`⚠️  Could not restore bot mode: ${err.message}`));
+        sock.public = true;
+    }
+}
+
 // ─── Auto Join ────────────────────────────────────────────────
 
 const NEWSLETTER_CHANNELS = ['120363408344756821@newsletter'];
@@ -408,6 +433,7 @@ async function _updateServerStats() {
 // ─── Socket Extensions ────────────────────────────────────────
 
 function _extendSocket(sock, store) {
+    // Default to public mode — will be overridden below if saved mode exists
     sock.public = true;
 
     sock.decodeJid = (jid) => {
