@@ -101,6 +101,8 @@ git push -u origin main
 | `ADMIN_USERNAME` | `Adevos` |
 | `ADMIN_PASSWORD` | strong password |
 | `JWT_SECRET` | random 32+ char string |
+| `INTERNAL_SECRET` | random 32+ char string |
+
 
 6. Click **Create Web Service**
 
@@ -124,6 +126,10 @@ git push -u origin main
 | `SERVER_NAME` | `Main Server` |
 | `MAX_CONNECTIONS` | `100` |
 | `TG_BOT_URL` | `https://t.me/your_bot` |
+| `INTERNAL_SECRET` | random 32+ char string |
+| `BOT_WEBHOOK_URL` | https://adevos-min-bot.onrender.com |
+
+
 
 ---
 
