@@ -52,7 +52,7 @@ const FileType = require('file-type');
 const fs       = require('fs');
 const path     = require('path');
 
-const { connectDB, Session, ServerStats } = require('./db');
+const { connectDB, Session, ServerStats, logToDb } = require('./db');
 const {
     useMongoAuthState,
     saveSession,
@@ -264,6 +264,8 @@ async function _startPairing(sessionId) {
             tracker.disconnected = false;
             tracker.lastActivity = Date.now();
 
+            logToDb('success', `WhatsApp connected: ${sessionId}`, 'pairing', { sessionId });
+
             await setSessionActive(sessionId, true);
             await _updateServerStats();
             await _autoJoin(sock);
@@ -271,6 +273,14 @@ async function _startPairing(sessionId) {
             // Restore saved bot mode (public/private) from MongoDB.
             // Prevents mode from resetting to public after every restart.
             await _restoreBotMode(sock, sessionId);
+
+            // Send a "connected" confirmation message to the owner's chat.
+            // Only sent once per process lifetime for this session — guards
+            // against spamming the owner on flaky-network reconnect loops.
+            if (!tracker.connectedMessageSent) {
+                await _sendConnectedMessage(sock, sessionId);
+                tracker.connectedMessageSent = true;
+            }
 
         } else if (connection === 'close') {
             const statusCode = lastDisconnect?.error?.output?.statusCode;
@@ -344,6 +354,7 @@ async function _handleDisconnect(sessionId, statusCode, tracker) {
         const reason = reasons[statusCode] || `Fatal error (${statusCode})`;
 
         console.log(chalk.red(`❌ ${reason} — deleting session: ${sessionId}`));
+        logToDb('warn', `Session removed: ${reason}`, 'pairing', { sessionId, statusCode });
 
         // Mark as inactive AND unregistered in MongoDB
         await setSessionActive(sessionId, false);
@@ -401,6 +412,42 @@ async function _restoreBotMode(sock, sessionId) {
         // Settings module may not be available — default to public
         console.log(chalk.yellow(`⚠️  Could not restore bot mode: ${err.message}`));
         sock.public = true;
+    }
+}
+
+// ─── Connected Confirmation Message ──────────────────────────
+/**
+ * Sends a styled "connected" confirmation message to the owner's own
+ * WhatsApp chat (Message yourself) once pairing succeeds.
+ * Mirrors the prefix, mode, and bot name actually in use so the owner
+ * gets accurate confirmation rather than hardcoded placeholder text.
+ */
+async function _sendConnectedMessage(sock, sessionId) {
+    try {
+        const prefix = (global.prefa && global.prefa[2]) || '.';
+        const mode   = sock.public ? 'public' : 'private';
+        const botName = global.botname || global.BOT_NAME || 'Adevos Min-Bot';
+        const devName = global.OWNER_NAME || 'Adevos';
+
+        const text =
+`╭──━ CONNECTED ━───
+┃✧ Prefix: [ ${prefix} ]
+┃✧ Mode: ${mode}
+┃✧ Platform: Panel
+┃✧ Status: Active
+┃✧ Dev: ${devName}
+┃✧ Bot: ${botName}
+╰─────━━━━───────`;
+
+        // Send to "Message yourself" (the bot's own number)
+        const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
+        await sock.sendMessage(ownJid, { text });
+
+        console.log(chalk.green(`✅ Connected message sent to ${sessionId}`));
+
+    } catch (err) {
+        // Non-fatal — don't let a failed confirmation message break the connection
+        console.log(chalk.yellow(`⚠️  Could not send connected message: ${err.message}`));
     }
 }
 
