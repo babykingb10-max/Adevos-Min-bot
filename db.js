@@ -237,6 +237,45 @@ const ServerStatsSchema = new mongoose.Schema({
     }
 });
 
+/**
+ * Log Schema
+ * Stores important bot logs so they can be viewed from the admin panel
+ * instead of relying on Render's log dashboard (saves bandwidth + gives
+ * persistent history that survives service restarts).
+ *
+ * Only IMPORTANT events are logged here (errors, pairings, disconnects) —
+ * not every single message, to keep this collection small.
+ */
+const LogSchema = new mongoose.Schema({
+    level: {
+        type:    String,
+        enum:    ['info', 'warn', 'error', 'success'],
+        default: 'info'
+    },
+    message: {
+        type:     String,
+        required: true
+    },
+    source: {
+        type:    String,
+        default: 'bot'  // 'bot' | 'website' | 'pairing'
+    },
+    meta: {
+        type:    mongoose.Schema.Types.Mixed,
+        default: {}
+    },
+    timestamp: {
+        type:    Date,
+        default: Date.now,
+        index:   true
+    },
+    // Auto-delete logs after 3 days — keeps the collection small
+    expiresAt: {
+        type:    Date,
+        default: () => new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    }
+});
+
 // ─── Models ───────────────────────────────────────────────────
 // Guard against OverwriteModelError on hot-reload
 const Session     = mongoose.models.Session     || mongoose.model('Session',     SessionSchema);
@@ -245,6 +284,7 @@ const Request     = mongoose.models.Request     || mongoose.model('Request',    
 const User        = mongoose.models.User        || mongoose.model('User',        UserSchema);
 const Blocked     = mongoose.models.Blocked     || mongoose.model('Blocked',     BlockedSchema);
 const ServerStats = mongoose.models.ServerStats || mongoose.model('ServerStats', ServerStatsSchema);
+const Log         = mongoose.models.Log         || mongoose.model('Log',         LogSchema);
 
 // ─── TTL Indexes ──────────────────────────────────────────────
 /**
@@ -260,6 +300,9 @@ async function ensureIndexes() {
             { expiresAt: 1 }, { expireAfterSeconds: 0, background: true }
         );
         await Request.collection.createIndex(
+            { expiresAt: 1 }, { expireAfterSeconds: 0, background: true }
+        );
+        await Log.collection.createIndex(
             { expiresAt: 1 }, { expireAfterSeconds: 0, background: true }
         );
         console.log(chalk.green('✅ MongoDB TTL indexes ready'));
@@ -340,10 +383,14 @@ async function updateServerOnline() {
     } catch {}
 }
 
-// Ping server stats every 2 minutes to show the server is alive
+// Ping server stats every 5 minutes (reduced from 2 min) to show the
+// server is alive. This is purely a "lastSeen" heartbeat — increasing
+// the interval reduces MongoDB write operations and bandwidth usage
+// without significantly affecting the "online/offline" status accuracy
+// (website still considers a server online if seen within last 5 min).
 setInterval(() => {
     if (isConnected) updateServerOnline().catch(() => {});
-}, 2 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 // ─── Cleanup Helpers ──────────────────────────────────────────
 
@@ -398,6 +445,47 @@ async function getSessionStats() {
     }
 }
 
+// ─── Logging Helper ───────────────────────────────────────────
+/**
+ * Write an important event to the Log collection.
+ * Used instead of (or alongside) console.log so events are visible
+ * in the admin panel without needing to open Render logs.
+ *
+ * Keep usage selective — only log meaningful events (errors, pairings,
+ * disconnects) not every routine action, to avoid bloating MongoDB
+ * and consuming extra bandwidth on writes.
+ *
+ * @param {string} level   - 'info' | 'warn' | 'error' | 'success'
+ * @param {string} message - Short description of the event
+ * @param {string} source  - 'bot' | 'website' | 'pairing'
+ * @param {object} meta    - Optional extra data (e.g. { sessionId, number })
+ */
+async function logToDb(level, message, source = 'bot', meta = {}) {
+    try {
+        // Batch-safe: fire and forget, don't block the caller
+        Log.create({ level, message, source, meta }).catch(() => {});
+    } catch {
+        // Never let logging failures crash the bot
+    }
+}
+
+/**
+ * Retrieve recent logs for the admin panel.
+ * @param {number} limit - Max number of logs to return (default 100)
+ * @param {string} level - Optional filter: 'error', 'warn', etc.
+ */
+async function getRecentLogs(limit = 100, level = null) {
+    try {
+        const query = level ? { level } : {};
+        return await Log.find(query)
+            .sort({ timestamp: -1 })
+            .limit(limit)
+            .lean();
+    } catch {
+        return [];
+    }
+}
+
 // ─── Exports ──────────────────────────────────────────────────
 module.exports = {
     connectDB,
@@ -408,8 +496,11 @@ module.exports = {
     User,
     Blocked,
     ServerStats,
+    Log,
     cleanInactiveSessions,
     cleanLoggedOutSessions,
     getSessionStats,
-    updateServerOnline
+    updateServerOnline,
+    logToDb,
+    getRecentLogs
 };
