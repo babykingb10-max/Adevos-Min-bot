@@ -762,6 +762,52 @@ const healthServer = http.createServer(async (req, res) => {
         return;
     }
 
+    // Internal webhook — called by the website service when it runs on a
+    // separate Render service. Triggers WhatsApp pairing for a given number.
+    // Protected by INTERNAL_SECRET to prevent unauthorized triggering.
+    if (url === '/internal/pair' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', async () => {
+            try {
+                const { number, secret } = JSON.parse(body || '{}');
+                const expectedSecret = process.env.INTERNAL_SECRET || 'adevos-internal';
+
+                if (secret !== expectedSecret) {
+                    res.writeHead(401, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'Unauthorized' }));
+                    return;
+                }
+
+                if (!number) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, message: 'number is required' }));
+                    return;
+                }
+
+                console.log(chalk.blue(`📨 Webhook pairing trigger received for: ${number}`));
+
+                const startpairing = require('./pair');
+                const sessionId    = number + '@s.whatsapp.net';
+
+                // Fire and forget — pairing happens asynchronously,
+                // code will appear in MongoDB pairings collection shortly
+                startpairing(sessionId).catch(err => {
+                    console.error(chalk.red(`❌ Webhook pairing failed [${number}]: ${err.message}`));
+                });
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Pairing triggered' }));
+
+            } catch (err) {
+                console.error(chalk.red(`❌ Webhook error: ${err.message}`));
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+        });
+        return;
+    }
+
     // 404 for everything else
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'not found' }));
