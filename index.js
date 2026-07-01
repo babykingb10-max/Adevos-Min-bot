@@ -13,7 +13,8 @@
  * - Kept:    figlet banner
  * - Kept:    bot.js + case.js loading
  * - Kept:    graceful shutdown handlers
- * - Kept:    error suppression for known Baileys noise
+ * - Kept:    Full noise suppression from original index.js
+ *            (signal keys, Buffer dumps, axios internals, etc.)
  */
 
 'use strict';
@@ -28,30 +29,26 @@ const chalk = require('chalk');
 let figlet;
 try { figlet = require('figlet'); } catch { figlet = null; }
 
-const { connectDB }   = require('./db');
+const { connectDB }     = require('./db');
 const { autoLoadPairs } = require('./autoload');
 
 // ─── Startup Banner ───────────────────────────────────────────
 function printBanner() {
     console.clear();
-
     if (figlet) {
         try {
-            console.log(chalk.green(figlet.textSync('ADEVOS BOT', {
-                font: 'Standard',
-                horizontalLayout: 'default'
-            })));
+            console.log(chalk.green(figlet.textSync('ADEVOS BOT', { font: 'Standard' })));
         } catch {
             console.log(chalk.green('\n  ADEVOS MIN-BOT\n'));
         }
     } else {
         console.log(chalk.green('\n  ADEVOS MIN-BOT\n'));
     }
-
-    console.log(chalk.yellow('▣━━━━━━━━━━━━━━━━━━━━━━━━━━━▣'));
-    console.log(chalk.green('  ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ  v2.0.0'));
-    console.log(chalk.cyan('  Powered by MongoDB Atlas'));
-    console.log(chalk.yellow('▣━━━━━━━━━━━━━━━━━━━━━━━━━━━▣\n'));
+    console.log(chalk.cyan('╭─────────────────────────────────╮'));
+    console.log(chalk.cyan('│') + chalk.bold.white('   Adevos Min-Bot  v2.0.0        ') + chalk.cyan('│'));
+    console.log(chalk.cyan('│') + chalk.gray('   Powered by MongoDB Atlas      ') + chalk.cyan('│'));
+    console.log(chalk.cyan('╰─────────────────────────────────╯'));
+    console.log('');
 }
 
 // ─── Load Bot Modules ─────────────────────────────────────────
@@ -59,7 +56,6 @@ function loadModules() {
     let telegramLoaded  = false;
     let whatsappLoaded  = false;
 
-    // Load Telegram bot (bot.js)
     const botPath = path.join(__dirname, 'bot.js');
     if (fs.existsSync(botPath)) {
         try {
@@ -75,48 +71,39 @@ function loadModules() {
         console.log(chalk.yellow('⚠️  bot.js not found — skipping Telegram bot'));
     }
 
-    // Load WhatsApp command handler (case.js)
-    // case.js does not need to be instantiated here — pair.js calls it directly
-    // on each incoming message. We just verify the file exists.
     const casePath = path.join(__dirname, 'case.js');
     if (fs.existsSync(casePath)) {
         try {
-            // Validate the file can be parsed without errors
             require.resolve('./case');
             whatsappLoaded = true;
             console.log(chalk.green('✅ WhatsApp command handler (case.js) ready'));
         } catch (err) {
             console.log(chalk.red(`❌ Failed to resolve case.js: ${err.message}`));
-            console.log(chalk.yellow('⚠️  Continuing without WhatsApp commands...\n'));
         }
     } else {
         console.log(chalk.yellow('⚠️  case.js not found — skipping WhatsApp commands'));
     }
 
-    // Print summary
     console.log(chalk.cyan('\n⚄══════════════════════════════⚄'));
     console.log(chalk.bold.white('  BOT INITIALIZATION SUMMARY'));
     console.log(chalk.cyan('⚄══════════════════════════════⚄'));
-    console.log(telegramLoaded
-        ? chalk.green('✅ Telegram Bot   : ACTIVE')
-        : chalk.red(  '❌ Telegram Bot   : INACTIVE'));
-    console.log(whatsappLoaded
-        ? chalk.green('✅ WhatsApp Cmds  : READY')
-        : chalk.red(  '❌ WhatsApp Cmds  : INACTIVE'));
+    console.log(telegramLoaded ? chalk.green('✅ Telegram Bot   : ACTIVE')   : chalk.red('❌ Telegram Bot   : INACTIVE'));
+    console.log(whatsappLoaded ? chalk.green('✅ WhatsApp Cmds  : READY')    : chalk.red('❌ WhatsApp Cmds  : INACTIVE'));
     console.log(chalk.cyan('⚄══════════════════════════════⚄\n'));
 
     if (!telegramLoaded && !whatsappLoaded) {
-        console.log(chalk.red('⚠️  Warning: No bot systems loaded! Check your files.\n'));
+        console.log(chalk.red('⚠️  Warning: No bot systems loaded!\n'));
     } else {
         console.log(chalk.green('✅ ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ is ACTIVE\n'));
     }
 }
 
-// ─── Error Suppression ────────────────────────────────────────
-// Baileys generates a lot of noise for known non-fatal conditions.
-// These are suppressed to keep logs readable.
+// ─── Noise Suppression ────────────────────────────────────────
+// Suppress Baileys crypto/signal noise and axios internals.
+// Only real errors and command activity should appear in logs.
 function setupErrorHandlers() {
-    const IGNORED_ERRORS = [
+    const IGNORED_PATTERNS = [
+        // Baileys WebSocket & connection noise
         'Socket connection timeout',
         'EKEYTYPE',
         'item-not-found',
@@ -126,30 +113,120 @@ function setupErrorHandlers() {
         'Value not found',
         'Stream Errored',
         'connection-replaced',
-        'TAG_MISMATCH'
+        'TAG_MISMATCH',
+
+        // Baileys signal/crypto session data
+        'Closing open session',
+        'Closing session',
+        'SessionEntry',
+        '_chains',
+        'chainKey',
+        'chainType',
+        'messageKeys',
+        'registrationId',
+        'ephemeralKeyPair',
+        'pubKey',
+        'privKey',
+        'lastRemoteEphemeralKey',
+        'previousCounter',
+        'rootKey',
+        'indexInfo',
+        'baseKey',
+        'baseKeyType',
+        'remoteIdentityKey',
+        'pendingPreKey',
+        'signedKeyId',
+        'preKeyId',
+        '<Buffer',
+        'Buffer 0',
+        'chainKey: [Object]',
+        'messageKeys: {',
+        'session in favor',
+        'open session in favor',
+        'BQ',
+
+        // Axios internal objects
+        'content-length',
+        'x-github-request-id',
+        'config: [Object',
+        'transitional:',
+        'transformRequest',
+        'transformResponse',
+        'xsrfCookieName',
+        'maxContentLength',
+        'maxBodyLength',
+        'validateStatus',
+        'AxiosHeaders',
+        'ClientRequest',
+        '_events:',
+        '_eventsCount',
+        '_maxListeners',
+        'outputData',
+        'outputSize',
+
+        // Chat history sync noise
+        'Loading Chat [',
+        'shouldSyncHistoryMessage',
     ];
 
-    function isIgnored(msg) {
-        return IGNORED_ERRORS.some(e => String(msg).includes(e));
-    }
+    const shouldIgnore = (msg) => {
+        const str = String(msg || '');
+        return IGNORED_PATTERNS.some(p => str.includes(p));
+    };
+
+    // Override console.log — only suppress noise, pass everything else
+    const _log = console.log.bind(console);
+    console.log = (...args) => {
+        if (args.some(a => shouldIgnore(a))) return;
+        _log(...args);
+    };
+
+    // Override console.warn
+    const _warn = console.warn.bind(console);
+    console.warn = (...args) => {
+        if (args.some(a => shouldIgnore(a))) return;
+        _warn(...args);
+    };
+
+    // Override console.error — suppress noise but keep real errors
+    const _err = console.error.bind(console);
+    console.error = (message, ...rest) => {
+        if (shouldIgnore(message)) return;
+        _err(message, ...rest);
+    };
+
+    // Override process.stdout.write — Baileys writes directly to stdout
+    const _stdout = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk, encoding, callback) => {
+        const str = typeof chunk === 'string' ? chunk : chunk?.toString?.() || '';
+        if (shouldIgnore(str)) {
+            if (typeof callback === 'function') callback();
+            return true;
+        }
+        return _stdout(chunk, encoding, callback);
+    };
+
+    // Override process.stderr.write
+    const _stderr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk, encoding, callback) => {
+        const str = typeof chunk === 'string' ? chunk : chunk?.toString?.() || '';
+        if (shouldIgnore(str)) {
+            if (typeof callback === 'function') callback();
+            return true;
+        }
+        return _stderr(chunk, encoding, callback);
+    };
 
     process.on('unhandledRejection', (reason) => {
-        if (isIgnored(reason)) return;
+        if (shouldIgnore(reason)) return;
         console.log(chalk.red('\n⚠️  Unhandled Rejection:'), reason);
     });
 
     process.on('uncaughtException', (err) => {
-        if (isIgnored(err)) return;
+        if (shouldIgnore(err?.message)) return;
         console.log(chalk.red(`\n❌ Uncaught Exception: ${err.message}`));
         if (err.stack) console.log(chalk.gray(err.stack));
     });
-
-    // Suppress stderr noise from Baileys WebSocket internals
-    const originalStderrWrite = process.stderr.write.bind(process.stderr);
-    process.stderr.write = (msg, ...args) => {
-        if (typeof msg === 'string' && isIgnored(msg)) return true;
-        return originalStderrWrite(msg, ...args);
-    };
 
     console.log(chalk.blue('📊 Bot monitoring active'));
     console.log(chalk.gray('Press Ctrl+C to stop\n'));
@@ -162,56 +239,58 @@ function setupShutdown() {
         console.log(chalk.green('👋 Goodbye!'));
         process.exit(0);
     });
-
     process.on('SIGTERM', () => {
         console.log(chalk.yellow('\n⚠️  Received SIGTERM...'));
         process.exit(0);
     });
+    process.on('message', (msg) => {
+        if (msg === 'shutdown') {
+            console.log(chalk.yellow('\n⚠️  PM2 shutdown signal...'));
+            process.exit(0);
+        }
+    });
 }
 
-// ─── Main Entry Point ─────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────
 async function main() {
     printBanner();
     setupShutdown();
 
-    // Step 1: Connect to MongoDB
-    // This must succeed before anything else runs.
+    // Step 1: Connect MongoDB (must succeed before anything else)
     try {
         console.log(chalk.blue('🔄 Connecting to MongoDB...'));
         await connectDB();
         console.log(chalk.green('✅ MongoDB connected\n'));
     } catch (err) {
         console.error(chalk.red(`❌ MongoDB connection failed: ${err.message}`));
-        console.error(chalk.red('   Make sure MONGODB_URI is set in your environment variables.'));
+        console.error(chalk.red('   Check that MONGODB_URI is set in environment variables.'));
         process.exit(1);
     }
 
-    // Step 2: Load bot modules (bot.js + case.js)
+    // Step 2: Load bot modules
     loadModules();
 
     // Step 3: Auto-load all registered sessions from MongoDB
-    // Replaces the old disk-based loop over ./nexstore/pairing/
     console.log(chalk.blue('🔄 Auto-loading paired sessions from MongoDB...'));
     try {
         const result = await autoLoadPairs({ batchSize: 10 });
-
         if (result.success) {
             if (result.total === 0) {
-                console.log(chalk.yellow('ℹ️  No registered sessions found — waiting for new pairings\n'));
+                console.log(chalk.yellow('ℹ️  No registered sessions — waiting for new pairings\n'));
             } else {
                 console.log(chalk.green(
-                    `✅ Auto-load complete: ${result.successful}/${result.total} sessions connected (${result.duration}s)\n`
+                    `✅ Auto-load complete: ${result.successful}/${result.total} sessions (${result.duration}s)\n`
                 ));
             }
         } else {
             console.log(chalk.yellow(`⚠️  Auto-load issue: ${result.message}\n`));
         }
     } catch (err) {
-        // Non-fatal — bot can still accept new pairings even if autoload fails
         console.log(chalk.yellow(`⚠️  Auto-load error: ${err.message}\n`));
     }
 
-    // Step 4: Set up error handlers
+    // Step 4: Setup noise suppression AFTER modules load
+    // (so module loading errors are still visible)
     setupErrorHandlers();
 }
 
