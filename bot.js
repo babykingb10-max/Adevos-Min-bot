@@ -494,121 +494,192 @@ bot.onText(/\/cast (.+)/, async (msg, match) => {
 
 // ─── Music Commands ───────────────────────────────────────────
 
-bot.onText(/^\/play\s*$/,  requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/play Faded Alan Walker`', { parse_mode: 'Markdown' })));
-bot.onText(/^\/video\s*$/, requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/video Faded Alan Walker`', { parse_mode: 'Markdown' })));
-bot.onText(/^\/lyrics\s*$/,requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/lyrics Faded Alan Walker`', { parse_mode: 'Markdown' })));
-bot.onText(/^\/gif\s*$/,   requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/gif funny cat`', { parse_mode: 'Markdown' })));
+// ─── Music Commands ──────────────────────────────────────────
+// Primary: ./lib/api (xwolf.space)
+// Fallback: davidcyril.name.ng / prexzyvilla.site
+
+const api = require('./lib/api');
+const { safeReply } = require('./lib/helpers');
+
+bot.onText(/^\/play\s*$/,   requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/play Faded Alan Walker`', { parse_mode: 'Markdown' })));
+bot.onText(/^\/video\s*$/,  requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/video Faded Alan Walker`', { parse_mode: 'Markdown' })));
+bot.onText(/^\/lyrics\s*$/, requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/lyrics Faded Alan Walker`', { parse_mode: 'Markdown' })));
+bot.onText(/^\/gif\s*$/,    requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/gif funny cat`', { parse_mode: 'Markdown' })));
+bot.onText(/^\/song\s*$/,   requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/song Faded`', { parse_mode: 'Markdown' })));
+bot.onText(/^\/dl\s*$/,     requireMembership((msg) => bot.sendMessage(msg.chat.id, 'Usage: `/dl Faded Alan Walker`', { parse_mode: 'Markdown' })));
 
 bot.onText(/\/play (.+)/, requireMembership(async (msg, match) => {
     const chatId = msg.chat.id;
     const query  = match[1].trim();
-    const status = await bot.sendMessage(chatId, `🔍 Finding *${query}*...`, { parse_mode: 'Markdown' });
+    const status = await safeReply(bot, chatId, `🔍 Finding *${query}*...`);
 
     try {
-        const { data } = await axios.get(`https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(query)}`);
-        if (!data.status || !data.result) throw new Error('Song not found');
+        // Primary: lib/api (xwolf.space)
+        let data = await api.downloadMp3(query).catch(() => null);
 
-        const song = data.result;
-        await bot.editMessageText(`⬇️ Downloading *${song.title}*...`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
+        // Fallback: davidcyril
+        if (!data?.success || !data?.downloadUrl) {
+            const res = await axios.get(`https://apis.davidcyril.name.ng/play?query=${encodeURIComponent(query)}`).catch(() => null);
+            if (res?.data?.status && res.data.result) {
+                data = { success: true, title: res.data.result.title, downloadUrl: res.data.result.download_url, quality: 'MP3' };
+            }
+        }
 
-        const fileRes = await axios.get(song.download_url, { responseType: 'arraybuffer', timeout: 60000 });
+        if (!data?.success || !data?.downloadUrl) throw new Error('Song not found');
+
+        await bot.editMessageText(`⬇️ Downloading *${data.title}*...`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
+        const fileRes = await axios.get(data.downloadUrl, { responseType: 'arraybuffer', timeout: 60000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+
         await bot.sendAudio(chatId, Buffer.from(fileRes.data), {
-            title:     song.title,
-            caption:   `🎵 *${song.title}*\n⏱ ${song.duration}`,
-            parse_mode:'Markdown',
+            title:      data.title,
+            caption:    `🎵 *${data.title}*`,
+            parse_mode: 'Markdown',
             reply_markup: { inline_keyboard: [[{ text: '📢 Channel', url: LINKS.channel }]] }
-        }, { filename: `${song.title}.mp3`, contentType: 'audio/mpeg' });
+        }, { filename: `${data.title}.mp3`, contentType: 'audio/mpeg' });
 
         await bot.deleteMessage(chatId, status.message_id).catch(() => {});
 
     } catch (err) {
-        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id });
+        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+    }
+}));
+
+bot.onText(/\/song (.+)/, requireMembership(async (msg, match) => {
+    const chatId = msg.chat.id;
+    const query  = match[1].trim();
+    const status = await safeReply(bot, chatId, `🔍 Searching *${query}*...`);
+    try {
+        const data = await api.search(query);
+        if (!data.success || !data.items?.length) throw new Error('No results found');
+        let text = `*Results for "${query}"*\n\n`;
+        data.items.slice(0, 6).forEach((item, i) => {
+            text += `*${i + 1}.* ${item.title}\n   ${item.channelTitle}\n   \`/play ${item.title}\`\n\n`;
+        });
+        await bot.editMessageText(text, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown', disable_web_page_preview: true });
+    } catch (err) {
+        await bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
     }
 }));
 
 bot.onText(/\/video (.+)/, requireMembership(async (msg, match) => {
     const chatId = msg.chat.id;
     const query  = match[1].trim();
-    const status = await bot.sendMessage(chatId, `🔍 Finding *${query}*...`, { parse_mode: 'Markdown' });
+    const status = await safeReply(bot, chatId, `🔍 Finding *${query}*...`);
 
     try {
-        const { data } = await axios.get(`https://apis.davidcyril.name.ng/download/ytmp4?query=${encodeURIComponent(query)}`);
-        if (!data.success || !data.result?.download_url) throw new Error('Video not found');
+        // Primary: lib/api
+        let data = await api.downloadMp4(query).catch(() => null);
 
-        const result = data.result;
-        await bot.editMessageText(`⬇️ Downloading *${result.title}*...`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
+        // Fallback: davidcyril
+        if (!data?.success || !data?.downloadUrl) {
+            const res = await axios.get(`https://apis.davidcyril.name.ng/download/ytmp4?query=${encodeURIComponent(query)}`).catch(() => null);
+            if (res?.data?.success && res.data.result?.download_url) {
+                data = { success: true, title: res.data.result.title, downloadUrl: res.data.result.download_url, quality: '720p' };
+            }
+        }
 
-        const fileRes = await axios.get(result.download_url, { responseType: 'arraybuffer', timeout: 120000 });
+        if (!data?.success || !data?.downloadUrl) throw new Error('Video not found');
+
+        await bot.editMessageText(`⬇️ Downloading *${data.title}*...`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
+        const fileRes = await axios.get(data.downloadUrl, { responseType: 'arraybuffer', timeout: 120000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+
         await bot.sendVideo(chatId, Buffer.from(fileRes.data), {
-            caption:    `🎬 *${result.title}*`,
+            caption:    `🎬 *${data.title}*\nQuality: ${data.quality || '720p'}`,
             parse_mode: 'Markdown',
             supports_streaming: true
-        }, { filename: `${result.title}.mp4`, contentType: 'video/mp4' });
+        }, { filename: `${data.title}.mp4`, contentType: 'video/mp4' });
 
         await bot.deleteMessage(chatId, status.message_id).catch(() => {});
 
     } catch (err) {
-        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id });
+        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id }).catch(() => {});
+    }
+}));
+
+bot.onText(/\/dl (.+)/, requireMembership(async (msg, match) => {
+    const chatId = msg.chat.id;
+    const query  = match[1].trim();
+    const status = await safeReply(bot, chatId, `🔍 Looking up *${query}*...`);
+    try {
+        const data = await api.downloadBoth(query);
+        if (!data.success) throw new Error('Not found');
+        const mp3 = data.mp3 || {}, mp4 = data.mp4 || {};
+        const text = `*${data.title}*\n\n${mp3.success ? `MP3 — ${mp3.quality || '320kbps'}\n` : ''}${mp4.success ? `MP4 — ${mp4.quality || '720p'}` : ''}`;
+        const buttons = [];
+        if (mp3.success && mp3.downloadUrl) buttons.push({ text: 'Download MP3', url: mp3.downloadUrl });
+        if (mp4.success && mp4.downloadUrl) buttons.push({ text: 'Download MP4', url: mp4.downloadUrl });
+        const keyboard = { inline_keyboard: [] };
+        if (buttons.length) keyboard.inline_keyboard.push(buttons);
+        if (data.youtubeUrl) keyboard.inline_keyboard.push([{ text: 'Watch on YouTube', url: data.youtubeUrl }]);
+        keyboard.inline_keyboard.push([{ text: 'Channel', url: LINKS.channel }]);
+        await bot.editMessageText(text, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown', reply_markup: keyboard });
+    } catch (err) {
+        await bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
     }
 }));
 
 bot.onText(/\/lyrics (.+)/, requireMembership(async (msg, match) => {
     const chatId = msg.chat.id;
     const query  = match[1].trim();
-    const status = await bot.sendMessage(chatId, `🔍 Fetching lyrics for *${query}*...`, { parse_mode: 'Markdown' });
-
+    const status = await safeReply(bot, chatId, `🔍 Fetching lyrics for *${query}*...`);
     try {
-        const res  = await axios.get(`https://apis.prexzyvilla.site/search/lyrics?title=${encodeURIComponent(query)}`);
-        const data = res.data;
-        if (!data.status || !data.data?.lyrics) throw new Error('Lyrics not found');
+        // Primary: lib/api
+        let data = await api.lyrics(query).catch(() => null);
 
-        const { title, artist, lyrics } = data.data;
-        let text = `🎶 *${title}* — ${artist}\n\n${lyrics}`;
+        // Fallback: prexzyvilla
+        if (!data?.success || !data?.lyrics) {
+            const res = await axios.get(`https://apis.prexzyvilla.site/search/lyrics?title=${encodeURIComponent(query)}`).catch(() => null);
+            if (res?.data?.status && res.data.data?.lyrics) {
+                data = { success: true, title: res.data.data.title, author: res.data.data.artist, lyrics: res.data.data.lyrics };
+            }
+        }
+
+        if (!data?.success || !data?.lyrics) throw new Error('Lyrics not found');
+        let text = `🎶 *${data.title}*\n💿 ${data.author || ''}\n\n${data.lyrics}`;
         if (text.length > 3800) text = text.slice(0, 3800) + '\n\n_...truncated_';
-
         await bot.editMessageText(text, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
     } catch (err) {
-        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id });
+        await bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
     }
 }));
 
 bot.onText(/\/trending/, requireMembership(async (msg) => {
     const chatId = msg.chat.id;
-    const status = await bot.sendMessage(chatId, '🔍 Fetching trending music...');
-
+    const status = await safeReply(bot, chatId, '🔍 Fetching trending music...');
     try {
-        const res  = await axios.get('https://apis.davidcyril.name.ng/trending');
-        const data = res.data;
-        if (!data.status || !data.result?.length) throw new Error('No trending data');
+        // Primary: lib/api
+        let items = null;
+        const data = await api.trending().catch(() => null);
+        if (data?.success && data.items?.length) items = data.items;
 
+        // Fallback: davidcyril
+        if (!items) {
+            const res = await axios.get('https://apis.davidcyril.name.ng/trending').catch(() => null);
+            if (res?.data?.status && res.data.result?.length) items = res.data.result;
+        }
+
+        if (!items?.length) throw new Error('No trending data');
         let text = '*🔥 Trending Music*\n\n';
-        data.result.slice(0, 8).forEach((item, i) => {
-            text += `*${i + 1}.* ${item.title}\n   \`/play ${item.title}\`\n\n`;
+        items.slice(0, 8).forEach((item, i) => {
+            text += `*${i + 1}.* ${item.title}\n   ${item.channelTitle || ''}\n   \`/play ${item.title}\`\n\n`;
         });
-
-        await bot.editMessageText(text, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' });
+        await bot.editMessageText(text, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown', disable_web_page_preview: true });
     } catch (err) {
-        bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id });
+        await bot.editMessageText(`❌ ${err.message}`, { chat_id: chatId, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
     }
 }));
 
 bot.onText(/\/gif (.+)/, requireMembership(async (msg, match) => {
     const chatId = msg.chat.id;
     const query  = match[1].trim();
-
     try {
         const tenorKey = process.env.TENOR_API_KEY || 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ';
-        const res      = await axios.get('https://api.tenor.com/v2/search', {
-            params: { q: query, key: tenorKey, limit: 1, media_filter: 'gif' },
-            timeout: 8000
+        const res = await axios.get('https://api.tenor.com/v2/search', {
+            params: { q: query, key: tenorKey, limit: 1, media_filter: 'gif' }, timeout: 8000
         });
         const gifUrl = res.data?.results?.[0]?.media_formats?.gif?.url;
         if (!gifUrl) throw new Error('No GIF found');
-
-        await bot.sendAnimation(chatId, gifUrl, {
-            caption:    `*${query}*`,
-            parse_mode: 'Markdown'
-        });
+        await bot.sendAnimation(chatId, gifUrl, { caption: `*${query}*`, parse_mode: 'Markdown' });
     } catch (err) {
         bot.sendMessage(chatId, `❌ ${err.message}`);
     }
@@ -691,6 +762,585 @@ bot.on('message', async (msg) => {
         }
     }
 });
+
+// ─── Imports for Group Commands ───────────────────────────────
+const storeLib   = require('./lib/store');
+const { buildBox }                                    = require('./lib/box');
+const { isGroup: _isGroup, isAdmin: _isAdmin,
+        getSenderName }                               = require('./lib/helpers');
+
+// ─── Group Command Helpers ────────────────────────────────────
+
+async function getTarget(msg) {
+    if (msg.reply_to_message) return msg.reply_to_message.from;
+    const parts   = msg.text?.split(' ') || [];
+    const mention = parts[1];
+    if (mention && mention.startsWith('@')) {
+        try {
+            const m = await bot.getChatMember(msg.chat.id, mention.replace('@', ''));
+            return m.user;
+        } catch { return null; }
+    }
+    return null;
+}
+
+function userName(user) {
+    return user.username ? `@${user.username}` : user.first_name;
+}
+
+function groupAdminOnly(handler) {
+    return async (msg, match) => {
+        if (!_isGroup(msg))
+            return bot.sendMessage(msg.chat.id, buildBox('⚠️', ['This command works in groups only.']), { parse_mode: 'Markdown' });
+        if (!await _isAdmin(bot, msg.chat.id, msg.from.id))
+            return bot.sendMessage(msg.chat.id, buildBox('🚫', ['Admins only.']), { parse_mode: 'Markdown' });
+        return handler(msg, match);
+    };
+}
+
+// ─── Group Management Commands ────────────────────────────────
+
+bot.onText(/\/add$/, groupAdminOnly(async (msg) => {
+    try {
+        const link = await bot.exportChatInviteLink(msg.chat.id);
+        await bot.sendMessage(msg.chat.id, buildBox('Invite Link', ['Share this link to add members:', null, link]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/promote/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('Promote', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.promoteChatMember(msg.chat.id, target.id, {
+            can_manage_chat: true, can_delete_messages: true, can_manage_video_chats: true,
+            can_restrict_members: true, can_promote_members: false, can_change_info: true,
+            can_invite_users: true, can_pin_messages: true,
+        });
+        await bot.sendMessage(msg.chat.id, buildBox('Promoted ✅', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'Now has admin permissions.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/demote/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('Demote', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.promoteChatMember(msg.chat.id, target.id, {
+            can_manage_chat: false, can_delete_messages: false, can_manage_video_chats: false,
+            can_restrict_members: false, can_promote_members: false, can_change_info: false,
+            can_invite_users: false, can_pin_messages: false,
+        });
+        await bot.sendMessage(msg.chat.id, buildBox('Demoted ✅', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'Admin rights removed.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/kick/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('Kick', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.banChatMember(msg.chat.id, target.id);
+        await bot.unbanChatMember(msg.chat.id, target.id);
+        await bot.sendMessage(msg.chat.id, buildBox('Kicked ✅', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`,
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/ban/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('BAN', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.banChatMember(msg.chat.id, target.id);
+        await bot.sendMessage(msg.chat.id, buildBox('BANNED 🔨', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'User cannot rejoin until unbanned.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/unban/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('UNBAN', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.unbanChatMember(msg.chat.id, target.id, { only_if_banned: true });
+        await bot.sendMessage(msg.chat.id, buildBox('UNBANNED ✅', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'User can now rejoin the group.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/mute/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('MUTE', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.restrictChatMember(msg.chat.id, target.id, {
+            permissions: { can_send_messages: false, can_send_media_messages: false, can_send_polls: false, can_send_other_messages: false },
+        });
+        await bot.sendMessage(msg.chat.id, buildBox('MUTED 🔇', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'User cannot send messages.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/unmute/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('UNMUTE', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    try {
+        await bot.restrictChatMember(msg.chat.id, target.id, {
+            permissions: { can_send_messages: true, can_send_media_messages: true, can_send_polls: true, can_send_other_messages: true, can_add_web_page_previews: true },
+        });
+        await bot.sendMessage(msg.chat.id, buildBox('UNMUTED 🔊', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`, null, 'User can send messages again.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/leave$/, groupAdminOnly(async (msg) => {
+    await bot.sendMessage(msg.chat.id, buildBox('👋 LEAVING', ['Bot is leaving this group...']), { parse_mode: 'Markdown' });
+    try { await bot.leaveChat(msg.chat.id); } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+// ─── Auto-Mod Commands ────────────────────────────────────────
+
+bot.onText(/\/antilink(.*)/, groupAdminOnly(async (msg, match) => {
+    const arg = match[1]?.trim().toLowerCase();
+    let on;
+    if (arg === 'on') on = true;
+    else if (arg === 'off') on = false;
+    else { const current = storeLib.getChat(msg.chat.id, 'antilink', false); on = !current; }
+    storeLib.setChat(msg.chat.id, 'antilink', on);
+    await bot.sendMessage(msg.chat.id, buildBox('🔗 ANTI-LINK', [
+        `Status: ${on ? 'ON ✅' : 'OFF ❌'}`, null,
+        on ? 'Links will be auto-deleted.' : 'Anti-link is now disabled.',
+    ]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/addbadword(.*)/, groupAdminOnly(async (msg, match) => {
+    const word = match[1]?.trim().toLowerCase();
+    if (!word) return bot.sendMessage(msg.chat.id, buildBox('⚠️ ADDBADWORD', ['Usage: /addbadword <word>']), { parse_mode: 'Markdown' });
+    const list = storeLib.getChat(msg.chat.id, 'badwords', []);
+    if (list.includes(word)) return bot.sendMessage(msg.chat.id, buildBox('ℹ️ ADDBADWORD', [`"${word}" is already in the list.`]), { parse_mode: 'Markdown' });
+    list.push(word);
+    storeLib.setChat(msg.chat.id, 'badwords', list);
+    await bot.sendMessage(msg.chat.id, buildBox('✅ BAD WORD ADDED', [`Word:  ${word}`, `Total: ${list.length} word(s)`]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/removebadword(.*)/, groupAdminOnly(async (msg, match) => {
+    const word = match[1]?.trim().toLowerCase();
+    if (!word) return bot.sendMessage(msg.chat.id, buildBox('⚠️ REMOVEBADWORD', ['Usage: /removebadword <word>']), { parse_mode: 'Markdown' });
+    let list = storeLib.getChat(msg.chat.id, 'badwords', []);
+    if (!list.includes(word)) return bot.sendMessage(msg.chat.id, buildBox('ℹ️ REMOVEBADWORD', [`"${word}" not in list.`]), { parse_mode: 'Markdown' });
+    list = list.filter(w => w !== word);
+    storeLib.setChat(msg.chat.id, 'badwords', list);
+    await bot.sendMessage(msg.chat.id, buildBox('✅ BAD WORD REMOVED', [`Word:  ${word}`, `Total: ${list.length} word(s)`]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/listbadword$/, groupAdminOnly(async (msg) => {
+    const list = storeLib.getChat(msg.chat.id, 'badwords', []);
+    if (!list.length) return bot.sendMessage(msg.chat.id, buildBox('🚫 BAD WORDS', ['No bad words set.']), { parse_mode: 'Markdown' });
+    await bot.sendMessage(msg.chat.id, buildBox('🚫 BAD WORDS LIST', [`Total: ${list.length}`, null, ...list.map((w, i) => `${i + 1}. ${w}`)]), { parse_mode: 'Markdown' });
+}));
+
+// Auto-mod message listener
+bot.on('message', async (msg) => {
+    if (!_isGroup(msg) || !msg.text) return;
+    const chatId = msg.chat.id;
+    if (await _isAdmin(bot, chatId, msg.from.id)) return;
+
+    const antilinkOn = storeLib.getChat(chatId, 'antilink', false);
+    if (antilinkOn && /(https?:\/\/|t\.me\/|www\.)\S+/gi.test(msg.text)) {
+        try {
+            await bot.deleteMessage(chatId, msg.message_id);
+            const w = await bot.sendMessage(chatId, buildBox('🔗 ANTI-LINK', [`@${msg.from.username || msg.from.first_name}`, 'Links are not allowed here.']), { parse_mode: 'Markdown' });
+            setTimeout(() => bot.deleteMessage(chatId, w.message_id).catch(() => {}), 5000);
+        } catch {}
+        return;
+    }
+
+    const badwords = storeLib.getChat(chatId, 'badwords', []);
+    if (badwords.length) {
+        const lower = msg.text.toLowerCase();
+        const found = badwords.find(w => lower.includes(w));
+        if (found) {
+            try {
+                await bot.deleteMessage(chatId, msg.message_id);
+                const w = await bot.sendMessage(chatId, buildBox('🚫 BAD WORD', [`@${msg.from.username || msg.from.first_name}`, 'Your message was removed.']), { parse_mode: 'Markdown' });
+                setTimeout(() => bot.deleteMessage(chatId, w.message_id).catch(() => {}), 5000);
+            } catch {}
+        }
+    }
+});
+
+// ─── Welcome & Goodbye ────────────────────────────────────────
+
+bot.onText(/\/welcome(.*)/, groupAdminOnly(async (msg, match) => {
+    const text = match[1]?.trim();
+    if (!text) {
+        const current = storeLib.getChat(msg.chat.id, 'welcome', null);
+        if (!current) return bot.sendMessage(msg.chat.id, buildBox('👋 WELCOME', ['No welcome message set.', null, 'Usage: /welcome <message>', 'Use {name} for user name.']), { parse_mode: 'Markdown' });
+        return bot.sendMessage(msg.chat.id, buildBox('👋 WELCOME MESSAGE', ['Current:', null, ...current.split('\n')]), { parse_mode: 'Markdown' });
+    }
+    storeLib.setChat(msg.chat.id, 'welcome', text);
+    await bot.sendMessage(msg.chat.id, buildBox('✅ WELCOME SET', ['Preview:', null, ...text.replace('{name}', 'New Member').split('\n')]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/goodbye(.*)/, groupAdminOnly(async (msg, match) => {
+    const text = match[1]?.trim();
+    if (!text) {
+        const current = storeLib.getChat(msg.chat.id, 'goodbye', null);
+        if (!current) return bot.sendMessage(msg.chat.id, buildBox('🚪 GOODBYE', ['No goodbye message set.', null, 'Usage: /goodbye <message>']), { parse_mode: 'Markdown' });
+        return bot.sendMessage(msg.chat.id, buildBox('🚪 GOODBYE MESSAGE', ['Current:', null, ...current.split('\n')]), { parse_mode: 'Markdown' });
+    }
+    storeLib.setChat(msg.chat.id, 'goodbye', text);
+    await bot.sendMessage(msg.chat.id, buildBox('✅ GOODBYE SET', ['Preview:', null, ...text.replace('{name}', 'Leaving Member').split('\n')]), { parse_mode: 'Markdown' });
+}));
+
+bot.on('new_chat_members', async (msg) => {
+    const welcomeText = storeLib.getChat(msg.chat.id, 'welcome', null);
+    if (!welcomeText) return;
+    for (const member of msg.new_chat_members) {
+        const name = member.username ? `@${member.username}` : member.first_name;
+        await bot.sendMessage(msg.chat.id, welcomeText.replace('{name}', name)).catch(() => {});
+    }
+});
+
+bot.on('left_chat_member', async (msg) => {
+    const goodbyeText = storeLib.getChat(msg.chat.id, 'goodbye', null);
+    if (!goodbyeText) return;
+    const member = msg.left_chat_member;
+    const name = member.username ? `@${member.username}` : member.first_name;
+    await bot.sendMessage(msg.chat.id, goodbyeText.replace('{name}', name)).catch(() => {});
+});
+
+// ─── Warn System ──────────────────────────────────────────────
+
+const DEFAULT_MAX_WARNS = 3;
+
+function getWarnData(chatId, userId)       { return storeLib.getUser(chatId, userId, 'warns', { count: 0, reasons: [] }); }
+function setWarnData(chatId, userId, data) { storeLib.setUser(chatId, userId, 'warns', data); }
+function getMaxWarns(chatId)               { return storeLib.getChat(chatId, 'maxwarns', DEFAULT_MAX_WARNS); }
+
+bot.onText(/\/warn(.*)/, groupAdminOnly(async (msg, match) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('⚠️ WARN', ['Reply to or mention a user to warn.']), { parse_mode: 'Markdown' });
+    const parts  = msg.text.split(' ');
+    const reason = (msg.reply_to_message ? parts.slice(1) : parts.slice(2)).join(' ') || 'No reason given';
+    const max    = getMaxWarns(msg.chat.id);
+    const data   = getWarnData(msg.chat.id, target.id);
+    data.count += 1;
+    data.reasons.push(reason);
+    setWarnData(msg.chat.id, target.id, data);
+    if (data.count >= max) {
+        await bot.sendMessage(msg.chat.id, buildBox('⚠️ WARNED — AUTO BAN', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`,
+            `Reason: ${reason}`, `Warns:  ${data.count}/${max} MAX REACHED`, null, 'User has been auto-banned.',
+        ]), { parse_mode: 'Markdown' });
+        try { await bot.banChatMember(msg.chat.id, target.id); setWarnData(msg.chat.id, target.id, { count: 0, reasons: [] }); } catch {}
+    } else {
+        await bot.sendMessage(msg.chat.id, buildBox('⚠️ WARNED', [
+            `User:   ${userName(target)}`, `By:     ${getSenderName(msg)}`,
+            `Reason: ${reason}`, `Warns:  ${data.count}/${max}`,
+        ]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/resetwarn/, groupAdminOnly(async (msg) => {
+    const target = await getTarget(msg);
+    if (!target) return bot.sendMessage(msg.chat.id, buildBox('⚠️ RESETWARN', ['Reply to or mention a user.']), { parse_mode: 'Markdown' });
+    setWarnData(msg.chat.id, target.id, { count: 0, reasons: [] });
+    await bot.sendMessage(msg.chat.id, buildBox('✅ WARNS CLEARED', [`User: ${userName(target)}`, `By: ${getSenderName(msg)}`]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/setwarn(.*)/, groupAdminOnly(async (msg, match) => {
+    const num = parseInt(match[1]?.trim());
+    if (!num || num < 1 || num > 20) return bot.sendMessage(msg.chat.id, buildBox('⚠️ SETWARN', ['Usage: /setwarn <1-20>']), { parse_mode: 'Markdown' });
+    storeLib.setChat(msg.chat.id, 'maxwarns', num);
+    await bot.sendMessage(msg.chat.id, buildBox('✅ WARN LIMIT SET', [`Max warns: ${num}`, null, `Auto-ban after ${num} warnings.`]), { parse_mode: 'Markdown' });
+}));
+
+bot.onText(/\/warnings/, async (msg) => {
+    if (!_isGroup(msg)) return;
+    const target = await getTarget(msg);
+    const userId = target ? target.id : msg.from.id;
+    const name   = target ? userName(target) : getSenderName(msg);
+    const data   = getWarnData(msg.chat.id, userId);
+    const max    = getMaxWarns(msg.chat.id);
+    const rows   = [`User:   ${name}`, `Warns:  ${data.count}/${max}`, null];
+    if (data.reasons.length) { rows.push('Reasons:'); data.reasons.forEach((r, i) => rows.push(`  ${i + 1}. ${r}`)); }
+    else rows.push('No warnings recorded.');
+    await bot.sendMessage(msg.chat.id, buildBox('📋 WARNINGS', rows), { parse_mode: 'Markdown' });
+});
+
+// ─── Group Settings Commands ──────────────────────────────────
+
+bot.onText(/\/setgroupname(.*)/, groupAdminOnly(async (msg, match) => {
+    const newName = match[1]?.trim();
+    if (!newName) return bot.sendMessage(msg.chat.id, buildBox('✏️ SET GROUP NAME', ['Usage: /setgroupname <name>']), { parse_mode: 'Markdown' });
+    try {
+        await bot.setChatTitle(msg.chat.id, newName);
+        await bot.sendMessage(msg.chat.id, buildBox('✅ NAME UPDATED', [`New name: ${newName}`]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('❌ FAILED', [err.message.includes('not enough rights') ? 'Bot needs "Change group info" permission.' : err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/setgpp(.*)/, groupAdminOnly(async (msg, match) => {
+    const url = match[1]?.trim();
+    if (!url || !/^https?:\/\/.+/i.test(url)) return bot.sendMessage(msg.chat.id, buildBox('🖼️ SET GROUP PHOTO', ['Usage: /setgpp <image url>']), { parse_mode: 'Markdown' });
+    const status = await bot.sendMessage(msg.chat.id, buildBox('🖼️ SET GROUP PHOTO', ['⏳ Downloading...']), { parse_mode: 'Markdown' });
+    try {
+        const axios = require('axios');
+        const res   = await axios.get(url, { responseType: 'arraybuffer', timeout: 20000 });
+        await bot.setChatPhoto(msg.chat.id, Buffer.from(res.data));
+        await bot.editMessageText(buildBox('✅ PHOTO UPDATED', ['Group photo changed.']), { chat_id: msg.chat.id, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
+    } catch (err) {
+        await bot.editMessageText(buildBox('❌ FAILED', [err.message]), { chat_id: msg.chat.id, message_id: status.message_id, parse_mode: 'Markdown' }).catch(() => {});
+    }
+}));
+
+bot.onText(/\/setdesc(.*)/, groupAdminOnly(async (msg, match) => {
+    const desc = match[1]?.trim();
+    if (!desc) return bot.sendMessage(msg.chat.id, buildBox('📝 SET DESCRIPTION', ['Usage: /setdesc <text>', 'To clear: /setdesc clear']), { parse_mode: 'Markdown' });
+    const finalDesc = desc.toLowerCase() === 'clear' ? '' : desc;
+    try {
+        await bot.setChatDescription(msg.chat.id, finalDesc);
+        await bot.sendMessage(msg.chat.id, buildBox(finalDesc ? '✅ DESCRIPTION UPDATED' : '✅ DESCRIPTION CLEARED', [finalDesc ? finalDesc.slice(0, 60) : 'Description removed.']), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('❌ FAILED', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/gctime$/, async (msg) => {
+    if (!_isGroup(msg)) return;
+    try {
+        const chat = await bot.getChat(msg.chat.id);
+        await bot.sendMessage(msg.chat.id, buildBox('ℹ️ GROUP INFO', [
+            `Name:    ${chat.title}`, `ID:      ${chat.id}`,
+            `Type:    ${chat.type}`, `Members: ${chat.member_count || 'N/A'}`,
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('❌ ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+});
+
+bot.onText(/\/onlyadmins$/, groupAdminOnly(async (msg) => {
+    const current = storeLib.getChat(msg.chat.id, 'onlyadmins', false);
+    const on = !current;
+    storeLib.setChat(msg.chat.id, 'onlyadmins', on);
+    try {
+        if (on) { await bot.setChatPermissions(msg.chat.id, { can_send_messages: false }); }
+        else    { await bot.setChatPermissions(msg.chat.id, { can_send_messages: true, can_send_media_messages: true, can_send_polls: true, can_send_other_messages: true }); }
+        await bot.sendMessage(msg.chat.id, buildBox(`${on ? '🔒' : '🔓'} ONLY ADMINS`, [
+            `Status: ${on ? 'ON ✅' : 'OFF ❌'}`, null,
+            on ? 'Only admins can send messages.' : 'All members can send messages.',
+        ]), { parse_mode: 'Markdown' });
+    } catch (err) {
+        await bot.sendMessage(msg.chat.id, buildBox('❌ ERROR', [err.message]), { parse_mode: 'Markdown' });
+    }
+}));
+
+bot.onText(/\/mode(.*)/, async (msg, match) => {
+    if (!_isGroup(msg)) return;
+    if (!await _isAdmin(bot, msg.chat.id, msg.from.id)) return bot.sendMessage(msg.chat.id, buildBox('🚫 DENIED', ['Admins only.']), { parse_mode: 'Markdown' });
+    const arg     = match[1]?.trim().toLowerCase();
+    const current = storeLib.getChat(msg.chat.id, 'adminmode', false);
+    if (!arg) return bot.sendMessage(msg.chat.id, buildBox('⚙️ BOT MODE', [
+        `Current: ${current ? '🔒 Admins only' : '🔓 Public'}`, null,
+        'To change:', '  /mode admins', '  /mode public',
+    ]), { parse_mode: 'Markdown' });
+    if (!['admins', 'public'].includes(arg)) return bot.sendMessage(msg.chat.id, buildBox('⚠️ MODE', ['Use: /mode admins  or  /mode public']), { parse_mode: 'Markdown' });
+    const on = arg === 'admins';
+    storeLib.setChat(msg.chat.id, 'adminmode', on);
+    await bot.sendMessage(msg.chat.id, buildBox(on ? '🔒 ADMIN MODE' : '🔓 PUBLIC MODE', [
+        on ? 'Bot responds to admins only.' : 'Bot responds to everyone.',
+    ]), { parse_mode: 'Markdown' });
+});
+
+const GROUP_RULES = [
+    '1. Be respectful to all members.',
+    '2. No spam or self-promotion.',
+    '3. No NSFW or offensive content.',
+    '4. Stay on topic.',
+    '5. No sharing of personal information.',
+    '6. Follow admin instructions.',
+];
+
+bot.onText(/\/rules$/, async (msg) => {
+    await bot.sendMessage(msg.chat.id,
+        `📜 *Group Rules*\n\n${GROUP_RULES.map(r => `  ${r}`).join('\n')}\n\n_Breaking rules may result in a warn, mute, or kick._`,
+        { parse_mode: 'Markdown' }
+    );
+});
+
+// ─── Callback Query Handler ───────────────────────────────────
+
+bot.on('callback_query', async (query) => {
+    const msg       = query.message;
+    const data      = query.data;
+    const userId    = query.from.id;
+    const chatId    = msg.chat.id;
+    const firstName = query.from.first_name || 'User';
+
+    if (data === 'check_membership') {
+        await bot.answerCallbackQuery(query.id, { text: 'Checking...' });
+        const mem = await checkMembership(userId);
+
+        if (mem.hasAll) {
+            await bot.editMessageText(
+`╭━───━⪨ Authorised ✅ ⪩━───━
+┃
+┃ All channels joined!
+┃ You can now use the bot.
+╰━───────────────────━`,
+                {
+                    chat_id: chatId, message_id: msg.message_id,
+                    reply_markup: { inline_keyboard: [[{ text: '🟢 Start', callback_data: 'start_bot' }]] }
+                }
+            );
+        } else {
+            await bot.answerCallbackQuery(query.id, { text: '❌ Please join all channels first!', show_alert: true });
+        }
+
+    } else if (data === 'start_bot') {
+        await bot.answerCallbackQuery(query.id);
+        const up = Math.floor(process.uptime());
+        const d  = Math.floor(up / 86400), h = Math.floor((up % 86400) / 3600);
+        const m  = Math.floor((up % 3600) / 60), s = up % 60;
+        await bot.sendMessage(chatId,
+`╭━───━⪨ Welcome ⪩━───━
+┃❏ 𝐁𝐨𝐭 𝐍𝐚𝐦𝐞: Adevos Min-Bot
+┃❏ 𝐕𝐞𝐫𝐬𝐢𝐨𝐧: V2
+┃❏ 𝐃𝐞𝐯: Adevos
+┃❏ 𝐍𝐚𝐦𝐞: ${firstName}
+┃❏ 𝐔𝐬𝐞𝐫 𝐈𝐃: ${userId}
+┃❏ 𝐑𝐮𝐧𝐭𝐢𝐦𝐞: ${d}d ${h}h ${m}m ${s}s
+╰━───────────────────━`,
+            {
+                reply_markup: { inline_keyboard: [
+                    [{ text: 'Group Menu', callback_data: 'menu_group' }, { text: 'Owner Menu', callback_data: 'menu_owner' }],
+                    [{ text: 'Download Menu', callback_data: 'menu_download' }],
+                    [{ text: 'Help', callback_data: 'help_msg' }],
+                    [{ text: 'Channel', url: LINKS.channel }, { text: 'Group', url: LINKS.group }]
+                ]}
+            }
+        );
+
+    } else if (data === 'menu_group') {
+        await bot.answerCallbackQuery(query.id);
+        await bot.sendMessage(chatId,
+`╭━───━⪨ Group Menu ⪩━───━
+┃
+┃ ❏ /add — Get invite link
+┃ ❏ /promote — Promote member
+┃ ❏ /demote — Demote admin
+┃ ❏ /kick — Kick member
+┃ ❏ /ban — Ban member
+┃ ❏ /unban — Unban member
+┃ ❏ /mute — Mute member
+┃ ❏ /unmute — Unmute member
+┃ ❏ /warn — Warn member
+┃ ❏ /resetwarn — Reset warns
+┃ ❏ /setwarn — Set warn limit
+┃ ❏ /warnings — View warnings
+┃ ❏ /antilink — Toggle anti-link
+┃ ❏ /addbadword — Add bad word
+┃ ❏ /removebadword — Remove
+┃ ❏ /listbadword — List bad words
+┃ ❏ /setgroupname — Set name
+┃ ❏ /setgpp — Set group photo
+┃ ❏ /setdesc — Set description
+┃ ❏ /welcome — Welcome message
+┃ ❏ /goodbye — Goodbye message
+┃ ❏ /rules — Group rules
+┃ ❏ /onlyadmins — Admin-only mode
+┃ ❏ /mode — Bot mode
+┃ ❏ /gctime — Group info
+┃
+╰━───────────────────━`,
+            { reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'start_bot' }], [{ text: 'Channel', url: LINKS.channel }]] } }
+        );
+
+    } else if (data === 'menu_owner') {
+        await bot.answerCallbackQuery(query.id);
+        await bot.sendMessage(chatId,
+`╭━───━⪨ Owner Menu ⪩━───━
+┃
+┃ ❏ /pair <number> — Pair device
+┃ ❏ /delpair <number> — Remove
+┃ ❏ /listpair confirm — List all
+┃ ❏ /autoload confirm — Reload
+┃ ❏ /clean — Clean dead sessions
+┃ ❏ /stats — Session statistics
+┃ ❏ /cast <message> — Broadcast
+┃ ❏ /runtime — Bot uptime
+┃
+╰━───────────────────━`,
+            { reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'start_bot' }]] } }
+        );
+
+    } else if (data === 'menu_download') {
+        await bot.answerCallbackQuery(query.id);
+        await bot.sendMessage(chatId,
+`╭━───━⪨ Download Menu ⪩━───━
+┃
+┃ ❏ /play <song> — Download audio
+┃ ❏ /video <name> — Download video
+┃ ❏ /dl <name> — MP3 & MP4 links
+┃ ❏ /song <name> — Search music
+┃ ❏ /lyrics <name> — Get lyrics
+┃ ❏ /trending — Trending music
+┃ ❏ /gif <search> — Search GIF
+┃
+╰━───────────────────━`,
+            { reply_markup: { inline_keyboard: [[{ text: '🔙 Back', callback_data: 'start_bot' }]] } }
+        );
+
+    } else if (data === 'help_msg') {
+        await bot.answerCallbackQuery(query.id);
+        await bot.sendMessage(chatId,
+`╭━───━⪨ Command List ⪩━───━
+┃
+┃ ❏ /pair <number> — Pair device
+┃ ❏ /delpair <number> — Remove
+┃ ❏ /play <song> — Download audio
+┃ ❏ /video <name> — Download video
+┃ ❏ /lyrics <name> — Get lyrics
+┃ ❏ /trending — Trending music
+┃ ❏ /gif <search> — Search GIF
+┃ ❏ /reportee <msg> — Report
+┃ ❏ /runtime — Bot uptime
+┃ ❏ /help — This menu
+┃
+╰━───────────────────━`,
+            { reply_markup: { inline_keyboard: [[{ text: 'Channel', url: LINKS.channel }, { text: 'Group', url: LINKS.group }], [{ text: 'Menu', callback_data: 'start_bot' }]] } }
+        );
+
+    } else if (data.startsWith('reply_')) {
+        await bot.answerCallbackQuery(query.id, { text: 'Reply to the report message above to respond', show_alert: true });
+    }
+});
+
+
 
 // ─── owner.json Helper ────────────────────────────────────────
 // Maintains backward compatibility with case.js which reads owner.json
