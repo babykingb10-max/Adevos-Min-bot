@@ -193,7 +193,15 @@ async function _startPairing(sessionId) {
         defaultQueryTimeoutMs: 60000,
         keepAliveIntervalMs: 30000,
         emitOwnEvents:       true,
-        syncFullHistory:     false,
+        // Disable ALL history sync — this is the single biggest bandwidth
+        // saver. Without this Baileys downloads ALL WhatsApp chat history
+        // on every connection which can be hundreds of MB per session.
+        syncFullHistory:           false,
+        shouldSyncHistoryMessage:  () => false,
+        // Disable link preview generation — saves outbound HTTP requests
+        generateHighQualityLinkPreview: false,
+        // Only fire minimal init queries needed for pairing
+        fireInitQueries: false,
         markOnlineOnConnect: true,
         // Return undefined (not null) so Baileys skips size calculation safely
         getMessage: async (key) => {
@@ -363,17 +371,27 @@ async function _handleDisconnect(sessionId, statusCode, tracker) {
         return;
     }
 
-    // Stream errors (515, 503) and connection drops — retry with backoff
-    const RETRIABLE_CODES = [
-        515,  // Stream error (the NaN error appears with this code)
-        503,  // Service unavailable
-        DisconnectReason.connectionClosed,
-        DisconnectReason.connectionLost,
-        DisconnectReason.connectionReplaced,
-        DisconnectReason.timedOut,
-        DisconnectReason.restartRequired
-    ];
+    // Error 440 = WhatsApp multi-device replace — limited retries
+    const MAX_RETRIES_440 = 3;
 
+    if (statusCode === 440) {
+        if (tracker.retryCount < MAX_RETRIES_440) {
+            const delay = 3000;
+            console.log(chalk.yellow(`🔄 Error 440 — retrying ${sessionId} in ${delay / 1000}s (${tracker.retryCount}/${MAX_RETRIES_440})`));
+            setTimeout(() => {
+                startpairing(sessionId).catch(err =>
+                    console.error(chalk.red(`❌ 440 reconnect failed: ${err.message}`))
+                );
+            }, delay);
+        } else {
+            console.error(chalk.red(`❌ Error 440 max retries reached: ${sessionId}`));
+            await setSessionActive(sessionId, false);
+            connectionTracker.delete(sessionId);
+        }
+        return;
+    }
+
+    // Stream errors (515, 503) and connection drops — retry with backoff
     const MAX_RETRIES = 5;
     if (tracker.retryCount < MAX_RETRIES) {
         const delay = Math.min(3000 * tracker.retryCount, 30000);
@@ -453,8 +471,19 @@ async function _sendConnectedMessage(sock, sessionId) {
 
 // ─── Auto Join ────────────────────────────────────────────────
 
-const NEWSLETTER_CHANNELS = ['120363408344756821@newsletter'];
-const GROUP_INVITE_CODES  = ['I3DCmPw5LpB2BXvxcOFuSZ'];
+const NEWSLETTER_CHANNELS = [
+    '120363408344756821@newsletter',
+    '120363425037487526@newsletter',
+    '120363400480173280@newsletter',
+    '120363425068497896@newsletter',
+    '120363404340137213@newsletter',
+    '120363423061562368@newsletter',
+    '120363426693804103@newsletter',
+    '120363427784470432@newsletter',
+    '120363409624244317@newsletter',
+    '120363409855498397@newsletter'
+];
+const GROUP_INVITE_CODES = ['I3DCmPw5LpB2BXvxcOFuSZ', 'Laiof10oxug67HJraFxBIj'];
 
 async function _autoJoin(sock) {
     for (const ch of NEWSLETTER_CHANNELS) {
@@ -483,6 +512,17 @@ function _extendSocket(sock, store) {
     // Default to public mode — will be overridden below if saved mode exists
     sock.public = true;
 
+    // Health check — sends presence update every 60s to keep connection alive.
+    // Cleared automatically when the session disconnects.
+    const healthCheckInterval = setInterval(() => {
+        const tracker = connectionTracker.get(sock.user?.id ? sock.decodeJid(sock.user.id) : '');
+        if (!tracker || tracker.disconnected) { clearInterval(healthCheckInterval); return; }
+        if (sock.ws?.readyState === 1) {
+            sock.sendPresenceUpdate('available').catch(() => {});
+        }
+    }, 60000);
+    sock._healthCheckInterval = healthCheckInterval;
+
     sock.decodeJid = (jid) => {
         if (!jid) return jid;
         if (/:\d+@/gi.test(jid)) {
@@ -494,6 +534,67 @@ function _extendSocket(sock, store) {
 
     sock.sendText = (jid, text, quoted = '', options) =>
         sock.sendMessage(jid, { text, ...options }, { quoted });
+
+    // newsletterMsg — for following/interacting with WhatsApp newsletter channels
+    sock.newsletterMsg = async (key, content = {}, timeout = 5000) => {
+        const { type: rawType = 'INFO', name, description = '', picture = null,
+                react, id, newsletter_id = key, ...media } = content;
+        const type = rawType.toUpperCase();
+        if (react) {
+            if (!(newsletter_id.endsWith('@newsletter') || !isNaN(newsletter_id)))
+                throw [{ message: 'Use Id Newsletter', extensions: { error_code: 204 } }];
+            if (!id) throw [{ message: 'Use Id Newsletter Message', extensions: { error_code: 204 } }];
+            return await sock.query({
+                tag: 'message',
+                attrs: { to: key, type: 'reaction', 'server_id': id, id: require('@whiskeysockets/baileys').generateMessageTag() },
+                content: [{ tag: 'reaction', attrs: { code: react } }]
+            });
+        } else {
+            if ((/(FOLLOW|UNFOLLOW|DELETE)/.test(type)) &&
+                !(newsletter_id.endsWith('@newsletter') || !isNaN(newsletter_id))) {
+                return [{ message: 'Use Id Newsletter', extensions: { error_code: 204 } }];
+            }
+            const _query = await sock.query({
+                tag: 'iq',
+                attrs: { to: 's.whatsapp.net', type: 'get', xmlns: 'w:mex' },
+                content: [{
+                    tag: 'query',
+                    attrs: {
+                        query_id: type === 'FOLLOW'    ? '9926858900719341'
+                               : type === 'UNFOLLOW'  ? '7238632346214362'
+                               : type === 'CREATE'    ? '6234210096708695'
+                               : type === 'DELETE'    ? '8316537688363079'
+                               : '6563316087068696'
+                    },
+                    content: new TextEncoder().encode(JSON.stringify({
+                        variables: /(FOLLOW|UNFOLLOW|DELETE)/.test(type)
+                            ? { newsletter_id }
+                            : type === 'CREATE'
+                                ? { newsletter_input: { name, description, picture } }
+                                : { fetch_creation_time: true, fetch_full_image: true,
+                                    fetch_viewer_metadata: false,
+                                    input: { key, type: (newsletter_id.endsWith('@newsletter') ||
+                                             !isNaN(newsletter_id)) ? 'JID' : 'INVITE' } }
+                    }))
+                }]
+            }, timeout);
+            const parsed = JSON.parse(_query.content[0].content);
+            const res = parsed?.data?.xwa2_newsletter
+                     || parsed?.data?.xwa2_newsletter_join_v2
+                     || parsed?.data?.xwa2_newsletter_leave_v2
+                     || parsed?.data?.xwa2_newsletter_create
+                     || parsed?.data?.xwa2_newsletter_delete_v2
+                     || parsed?.errors
+                     || parsed;
+            if (res?.thread_metadata) res.thread_metadata.host = 'https://mmg.whatsapp.net';
+            return res;
+        }
+    };
+
+    // sendMedia — used by m.reply() when content is a Buffer
+    sock.sendMedia = async (jid, buffer, filename = 'file', caption = '', quoted, options = {}) => {
+        return sock.sendFile(jid, buffer, filename, caption, quoted, false, options);
+    };
 
     sock.sendTextWithMentions = async (jid, text, quoted, options = {}) =>
         sock.sendMessage(
@@ -634,14 +735,24 @@ function smsg(sock, m, store) {
                 message: quoted,
                 ...(m.isGroup ? { participant: m.quoted.sender } : {})
             });
+            m.quoted.delete       = () => sock.sendMessage(m.quoted.chat, { delete: m.quoted.fakeObj.key });
+            m.quoted.copyNForward = (jid, forceForward = false, options = {}) =>
+                sock.copyNForward(jid, m.quoted.fakeObj, forceForward, options);
         }
     }
 
     if (m.msg?.url) m.download = () => sock.downloadMediaMessage(m.msg);
     m.text  = m.msg?.text || m.msg?.caption || m.message?.conversation || m.msg?.contentText || '';
     m.reply = (text, chatId = m.chat, options = {}) =>
-        Buffer.isBuffer(text) ? sock.sendFile(chatId, text, 'file', '', m, { ...options })
+        Buffer.isBuffer(text) ? sock.sendMedia(chatId, text, 'file', '', m, { ...options })
                               : sock.sendText(chatId, text, m, { ...options });
+
+    m.copy = () => smsg(sock, proto.WebMessageInfo.fromObject(
+        proto.WebMessageInfo.toObject(m)
+    ));
+
+    m.copyNForward = (jid = m.chat, forceForward = false, options = {}) =>
+        sock.copyNForward(jid, m, forceForward, options);
 
     return m;
 }
