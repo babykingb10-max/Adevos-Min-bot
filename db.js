@@ -238,6 +238,17 @@ const ServerStatsSchema = new mongoose.Schema({
 });
 
 /**
+ * Store Schema
+ * Backing store for lib/store.js — replaces data/store.json disk file.
+ * Holds all group settings (antilink, badwords, warns, welcome, etc.)
+ * that survive Render restarts.
+ */
+const StoreSchema = new mongoose.Schema({
+    key:   { type: String, required: true, unique: true, index: true },
+    value: { type: mongoose.Schema.Types.Mixed, default: null }
+}, { strict: false });
+
+/**
  * Log Schema
  * Stores important bot logs so they can be viewed from the admin panel
  * instead of relying on Render's log dashboard (saves bandwidth + gives
@@ -285,6 +296,7 @@ const User        = mongoose.models.User        || mongoose.model('User',       
 const Blocked     = mongoose.models.Blocked     || mongoose.model('Blocked',     BlockedSchema);
 const ServerStats = mongoose.models.ServerStats || mongoose.model('ServerStats', ServerStatsSchema);
 const Log         = mongoose.models.Log         || mongoose.model('Log',         LogSchema);
+const StoreModel  = mongoose.models.Store         || mongoose.model('Store',        StoreSchema);
 
 // ─── TTL Indexes ──────────────────────────────────────────────
 /**
@@ -497,6 +509,7 @@ module.exports = {
     Blocked,
     ServerStats,
     Log,
+    StoreModel,
     cleanInactiveSessions,
     cleanLoggedOutSessions,
     getSessionStats,
@@ -504,3 +517,4 @@ module.exports = {
     logToDb,
     getRecentLogs
 };
+
