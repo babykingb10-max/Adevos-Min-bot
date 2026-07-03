@@ -451,14 +451,16 @@ async function _sendConnectedMessage(sock, sessionId) {
         const devName = global.OWNER_NAME || 'Adevos';
 
         const text =
-`╭──━ CONNECTED ━───
+`╭─━ BOT CONNECTED 
 ┃✧ Prefix: [ ${prefix} ]
 ┃✧ Mode: ${mode}
-┃✧ Platform: Panel
+┃✧ Platform: Adevos-X Tech 
 ┃✧ Status: Active
 ┃✧ Dev: ${devName}
 ┃✧ Bot: ${botName}
-╰─────━━━━───────`;
+╰─━
+
+> Type .menu to see all available commands`;
 
         // Send to "Message yourself" (the bot's own number)
         const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
