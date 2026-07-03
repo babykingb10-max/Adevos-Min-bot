@@ -893,7 +893,7 @@ case 'menu': {
 │ ✧ 𝐏𝐫𝐞𝐟𝐢𝐱: [ ${prefix} ]
 │ ✧ 𝐔𝐬𝐞𝐫: ${m.pushName}
 │ ✧ 𝐌𝐨𝐝𝐞: ${King.public ? 'Public' : 'Private'}
-│ ✧ 𝐏𝐥𝐚𝐭𝐟𝐨𝐫𝐦: 𝐓𝐞𝐥𝐞𝐠𝐫𝐚𝐦
+│ ✧ 𝐏𝐥𝐚𝐭𝐟𝐨𝐫𝐦: Adevos-X Tech 
 │ ✧ 𝐒𝐩𝐞𝐞𝐝: ${latensi.toFixed(4)} Ms
 │ ✧ 𝐔𝐩𝐭𝐢𝐦𝐞: ${formatUptime(process.uptime())}
 │ ✧ 𝐕𝐞𝐫𝐬𝐢𝐨𝐧: 2.0.0
@@ -1039,7 +1039,7 @@ ${readMore}
 │ ◇ ${prefix}highfive
 │ ◇ ${prefix}kill
 │ ◇ ${prefix}kiss
-│ ◇ ${prefix}sticker
+│ ◇ ${prefix}tosticker
 │ ◇ ${prefix}take
 │ ◇ ${prefix}nom
 │ ◇ ${prefix}pat
