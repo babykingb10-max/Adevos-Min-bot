@@ -407,7 +407,7 @@ bot.onText(/\/help/, async (msg) => {
     trackedUsers.add(msg.from.id.toString());
 
     bot.sendMessage(chatId,
-`╭━───━⪨ Commands ⪩━───━
+`╭━──━⪨ Fast Commands List ⪩━──━
 ┃
 ┃ ❏ /pair <number>     — Pair WhatsApp
 ┃ ❏ /delpair <number>  — Remove session
@@ -425,6 +425,8 @@ bot.onText(/\/help/, async (msg) => {
 ┃ ❏ /clean             — Remove dead sessions
 ┃ ❏ /stats             — Session statistics
 ┃ ❏ /cast <message>    — Broadcast
+┃  Tap Menu to see all
+┃  Commands Categories 
 ╰━───────────────────━`,
         {
             parse_mode:   'Markdown',
@@ -1318,7 +1320,7 @@ bot.on('callback_query', async (query) => {
     } else if (data === 'help_msg') {
         await bot.answerCallbackQuery(query.id);
         await bot.sendMessage(chatId,
-`╭━───━⪨ Command List ⪩━───━
+`╭━──━⪨ Fast Commands List ⪩━──━
 ┃
 ┃ ❏ /pair <number> — Pair device
 ┃ ❏ /delpair <number> — Remove
@@ -1330,7 +1332,8 @@ bot.on('callback_query', async (query) => {
 ┃ ❏ /reportee <msg> — Report
 ┃ ❏ /runtime — Bot uptime
 ┃ ❏ /help — This menu
-┃
+┃   Tap Menu to see all 
+┃   Commands Categories 
 ╰━───────────────────━`,
             { reply_markup: { inline_keyboard: [[{ text: 'Channel', url: LINKS.channel }, { text: 'Group', url: LINKS.group }], [{ text: 'Menu', callback_data: 'start_bot' }]] } }
         );
