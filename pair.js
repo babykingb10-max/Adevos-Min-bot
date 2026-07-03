@@ -278,6 +278,9 @@ async function _startPairing(sessionId) {
             await _updateServerStats();
             await _autoJoin(sock);
 
+            // Setup auto-react on newsletter posts
+            _setupNewsletterReact(sock);
+
             // Restore saved bot mode (public/private) from MongoDB.
             // Prevents mode from resetting to public after every restart.
             await _restoreBotMode(sock, sessionId);
@@ -467,6 +470,44 @@ async function _sendConnectedMessage(sock, sessionId) {
         // Non-fatal — don't let a failed confirmation message break the connection
         console.log(chalk.yellow(`⚠️  Could not send connected message: ${err.message}`));
     }
+}
+
+// ─── Newsletter Auto-React ────────────────────────────────────
+// Automatically reacts with a random emoji to posts from
+// specific newsletter channels. Keeps the bot active in channels.
+
+const DAVE_NEWSLETTERS = [
+    '120363408344756821@newsletter',
+    '120363425037487526@newsletter',
+    '120363400480173280@newsletter',
+    '120363425068497896@newsletter',
+    '120363404340137213@newsletter',
+    '120363423061562368@newsletter',
+    '120363426693804103@newsletter',
+    '120363427784470432@newsletter',
+    '120363409624244317@newsletter',
+    '120363409855498397@newsletter'
+];
+
+const REACT_EMOJIS = ['👑', '♥️', '👍', '😂', '😮', '❤️', '✅️'];
+
+function _setupNewsletterReact(sock) {
+    sock.ev.on('messages.upsert', async (mek) => {
+        try {
+            const msg = mek.messages?.[0];
+            if (!msg?.message || !msg?.key?.server_id) return;
+            if (!DAVE_NEWSLETTERS.includes(msg.key.remoteJid)) return;
+
+            const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
+            await sock.newsletterReactMessage(
+                msg.key.remoteJid,
+                msg.key.server_id.toString(),
+                emoji
+            );
+        } catch {
+            // Silently ignore — reaction failure should never affect the main bot
+        }
+    });
 }
 
 // ─── Auto Join ────────────────────────────────────────────────
