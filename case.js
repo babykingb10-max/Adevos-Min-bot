@@ -2114,7 +2114,7 @@ case 'repo': {
 *╭──── [ ADEVOS MIN-BOT ]*
 │
 ├ 🌍 *Website:*
-│  https://adevosminbot.adevosxtech.site
+│  https://minbot.adevosxtech.site
 │
 ├ 📋 *How To Pair:*
 │
