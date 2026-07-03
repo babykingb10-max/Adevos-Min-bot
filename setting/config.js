@@ -16,12 +16,12 @@ global.ownernumber = '255663402315'  //creator number
 global.location = "Nigeria,kwara"
 global.prefa = ['','!','.','#','&']
 //================DO NOT CHANGE OR YOU'LL GET AN ERROR=============\
-global.footer = "ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ" //footer section
+global.footer = "Adevos Min-Bot" //footer section
 global.link = "https://chat.whatsapp.com/C3HgAWtt08fBdw907vePBe?mode=gi_t"
 global.autobio = true//auto update bio
 global.botName = "Adevos-X"
 global.version = "1.0.0"
-global.botname = "ᴀᴅᴇᴠᴏꜱ ᴍɪɴ-ʙᴏᴛ"
+global.botname = "Adevos Min-Bot"
 global.author = "Adevos-X"
 global.themeemoji = "🥷"
 global.wagc = 'https://chat.whatsapp.com/C3HgAWtt08fBdw907vePBe?mode=gi_t'
