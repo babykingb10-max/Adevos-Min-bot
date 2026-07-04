@@ -167,6 +167,14 @@ function setupErrorHandlers() {
         // Chat history sync noise
         'Loading Chat [',
         'shouldSyncHistoryMessage',
+
+        // case.js message logging noise (generates [object Object] spam)
+        'message " [object Object]',
+        '[object Object] "  from',
+        'from No Name id',
+        'from devil',
+        'id private chat',
+        'id group',
     ];
 
     const shouldIgnore = (msg) => {
@@ -299,3 +307,4 @@ main().catch(err => {
     if (err.stack) console.error(chalk.gray(err.stack));
     process.exit(1);
 });
+
