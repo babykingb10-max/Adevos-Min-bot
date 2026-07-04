@@ -255,6 +255,9 @@ async function _startPairing(sessionId) {
     if (store && typeof store.bind === 'function') store.bind(sock.ev);
     tracker.socket = sock;
 
+    // MAREKEBISHO 1: Kuongeza mbinu za socket mapema kabla ya matukio kuitwa
+    _extendSocket(sock, store);
+
     // ─── Request Pairing Code ─────────────────────────────────
     if (!state.creds?.registered) {
         const phoneNumber = sessionId.replace('@s.whatsapp.net', '').replace(/[^0-9]/g, '');
@@ -418,9 +421,7 @@ async function _startPairing(sessionId) {
         }
     });
 
-        sock.ev.on('creds.update', saveCreds);
-
-    _extendSocket(sock, store);
+    sock.ev.on('creds.update', saveCreds);
 
     return sock;
 }
@@ -549,8 +550,8 @@ async function _sendConnectedMessage(sock, sessionId) {
 
 > Type .menu to see all available commands `;
 
-        // Send to "Message yourself" (the bot's own number)
-        const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
+        // MAREKEBISHO 2: Kujihami kama decodeJid haipo kwa sekunde hiyo
+        const ownJid = sock.user?.id ? (sock.decodeJid ? sock.decodeJid(sock.user.id) : sessionId) : sessionId;
         await sock.sendMessage(ownJid, { text });
 
         console.log(chalk.green(`✅ Connected message sent to ${sessionId}`));
@@ -639,7 +640,10 @@ function _extendSocket(sock, store) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
     }, 120000);
-    tracker._healthCheckInterval = healthCheckInterval;
+    
+    const currentJid = sock.user?.id ? (sock.decodeJid ? sock.decodeJid(sock.user.id) : sock.user.id) : '';
+    const tracker = connectionTracker.get(currentJid);
+    if (tracker) tracker._healthCheckInterval = healthCheckInterval;
 
     sock.decodeJid = (jid) => {
         if (!jid) return jid;
