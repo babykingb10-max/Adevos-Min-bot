@@ -74,6 +74,37 @@ const MAX_CONNECTIONS = parseInt(process.env.MAX_CONNECTIONS || '100');
 // Value: { socket, retryCount, disconnected, lastActivity }
 const connectionTracker = new Map();
 
+// Periodic cleanup of connectionTracker — removes stale entries.
+// Without this the Map grows forever and holds references to dead sockets,
+// preventing garbage collection even after sessions are deleted from MongoDB.
+setInterval(() => {
+    const now      = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    let   removed  = 0;
+
+    for (const [sessionId, tracker] of connectionTracker.entries()) {
+        const isStale = tracker.disconnected &&
+                        (now - (tracker.lastActivity || 0)) > ONE_HOUR;
+
+        if (isStale) {
+            // Clear any lingering intervals before removing
+            if (tracker._healthCheckInterval) {
+                clearInterval(tracker._healthCheckInterval);
+            }
+            connectionTracker.delete(sessionId);
+            removed++;
+        }
+    }
+
+    if (removed > 0) {
+        console.log(chalk.yellow(`🧹 connectionTracker: removed ${removed} stale entries (${connectionTracker.size} remaining)`));
+    }
+
+    // Force garbage collection hint (Node.js may ignore this but it signals intent)
+    if (global.gc) global.gc();
+
+}, 15 * 60 * 1000); // Run every 15 minutes
+
 // ─── Connection Queue ─────────────────────────────────────────
 // Prevents overwhelming the server by limiting simultaneous
 // new connections being established at once.
@@ -151,6 +182,12 @@ async function _startPairing(sessionId) {
     tracker.retryCount++;
     tracker.disconnected  = false;
     tracker.lastActivity  = Date.now();
+
+    // Clear old health check interval if reconnecting
+    if (tracker._healthCheckInterval) {
+        clearInterval(tracker._healthCheckInterval);
+        tracker._healthCheckInterval = null;
+    }
 
     const { version }           = await fetchLatestBaileysVersion();
     const { state, saveCreds }  = await useMongoAuthState(sessionId);
@@ -305,11 +342,27 @@ async function _startPairing(sessionId) {
         }
     });
 
+    // Load case.js ONCE per socket instance — not inside the handler
+    const caseHandler = require('./case');
+
     // ─── Incoming Messages → case.js ─────────────────────────
+    // removeAllListeners before adding — prevents duplicate listeners
+    // from accumulating on every reconnect (primary memory leak source).
+    sock.ev.removeAllListeners('messages.upsert');
+
     sock.ev.on('messages.upsert', async (chatUpdate) => {
         try {
             const msg = chatUpdate.messages?.[0];
             if (!msg?.message) return;
+
+            // Drop messages older than 5 minutes — prevents processing
+            // backlogged messages after reconnect which flood memory and CPU.
+            const msgTimestamp = msg.messageTimestamp
+                ? (typeof msg.messageTimestamp === 'object'
+                    ? msg.messageTimestamp.low
+                    : msg.messageTimestamp)
+                : 0;
+            if (msgTimestamp && (Date.now() / 1000) - msgTimestamp > 300) return;
 
             msg.message = (Object.keys(msg.message)[0] === 'ephemeralMessage')
                 ? msg.message.ephemeralMessage.message
@@ -318,22 +371,54 @@ async function _startPairing(sessionId) {
             if (!sock.public && !msg.key.fromMe && chatUpdate.type === 'notify') return;
             if (msg.key.id.startsWith('BAE5') && msg.key.id.length === 16) return;
 
-            // case.js is not modified - passes through as-is
+            // Handle newsletter auto-react inline (avoids a second listener)
+            if (sock._newsletterReactEnabled && msg?.key?.server_id) {
+                if (DAVE_NEWSLETTERS.includes(msg.key.remoteJid)) {
+                    const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
+                    sock.newsletterReactMessage(
+                        msg.key.remoteJid,
+                        msg.key.server_id.toString(),
+                        emoji
+                    ).catch(() => {});
+                    return; // Newsletter posts don't need command processing
+                }
+            }
+
             const mek = smsg(sock, msg, store);
 
-            // case.js uses 'mek' and 'King' (socket) as global variables (legacy pattern).
-            // Set them globally so case.js works without modification.
             global.mek  = mek;
             global.King = sock;
 
-            require('./case')(sock, mek, chatUpdate, store);
+            // Log ONLY command messages (starting with prefix) — not every chat message.
+            // This is the single biggest source of console noise and string allocation.
+            const body = mek.body || '';
+            const prefix = global.prefa?.[2] || '.';
+            const isCommand = body.startsWith(prefix);
+            if (isCommand) {
+                const cmd = body.slice(prefix.length).split(' ')[0].toLowerCase();
+                console.log(chalk.cyan(
+                    `📨 [${sessionId.split('@')[0]}] ${msg.key.remoteJid?.split('@')[0]} → ${prefix}${cmd}`
+                ));
+            }
+
+            // Run command handler — errors are caught and logged only for commands
+            try {
+                caseHandler(sock, mek, chatUpdate, store);
+            } catch (cmdErr) {
+                if (isCommand) {
+                    console.error(chalk.red(`❌ Command error [${body.slice(0, 30)}]: ${cmdErr.message}`));
+                }
+            }
 
         } catch (err) {
-            console.error(chalk.red(`❌ Message handler: ${err.message}`));
+            // Only log if it's a meaningful error, not routine noise
+            if (err.message && !err.message.includes('Bad MAC') && !err.message.includes('decrypt')) {
+                console.error(chalk.red(`❌ Message handler: ${err.message}`));
+            }
         }
     });
 
-    sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('creds.update', saveCreds);
 
     _extendSocket(sock, store);
 
@@ -370,6 +455,8 @@ async function _handleDisconnect(sessionId, statusCode, tracker) {
         // Mark as inactive AND unregistered in MongoDB
         await setSessionActive(sessionId, false);
         await deleteSession(sessionId);
+        // Full cleanup — remove tracker entry and any intervals
+        if (tracker._healthCheckInterval) clearInterval(tracker._healthCheckInterval);
         connectionTracker.delete(sessionId);
         return;
     }
@@ -451,14 +538,16 @@ async function _sendConnectedMessage(sock, sessionId) {
         const devName = global.OWNER_NAME || 'Adevos';
 
         const text =
-`╭──━ CONNECTED ━───
+`╭─━ BOT CONNECTED 
 ┃✧ Prefix: [ ${prefix} ]
 ┃✧ Mode: ${mode}
-┃✧ Platform: Panel
+┃✧ Platform: Adevos-X Tech 
 ┃✧ Status: Active
 ┃✧ Dev: ${devName}
 ┃✧ Bot: ${botName}
-╰─────━━━━───────`;
+╰─━
+
+> Type .menu to see all available commands `;
 
         // Send to "Message yourself" (the bot's own number)
         const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
@@ -477,30 +566,25 @@ async function _sendConnectedMessage(sock, sessionId) {
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-    '120363426943699042@newsletter',
-    '120363360124246058@newsletter',
-    '120363417629314678@newsletter'
+    '120363408344756821@newsletter',
+    '120363425037487526@newsletter',
+    '120363400480173280@newsletter',
+    '120363425068497896@newsletter',
+    '120363404340137213@newsletter',
+    '120363423061562368@newsletter',
+    '120363426693804103@newsletter',
+    '120363427784470432@newsletter',
+    '120363409624244317@newsletter',
+    '120363409855498397@newsletter'
 ];
 
-const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
+const REACT_EMOJIS = ['❤️', '✅️', '👍', '👑', '😮', '😁', '💯'];
 
 function _setupNewsletterReact(sock) {
-    sock.ev.on('messages.upsert', async (mek) => {
-        try {
-            const msg = mek.messages?.[0];
-            if (!msg?.message || !msg?.key?.server_id) return;
-            if (!DAVE_NEWSLETTERS.includes(msg.key.remoteJid)) return;
-
-            const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
-            await sock.newsletterReactMessage(
-                msg.key.remoteJid,
-                msg.key.server_id.toString(),
-                emoji
-            );
-        } catch {
-            // Silently ignore — reaction failure should never affect the main bot
-        }
-    });
+    // Newsletter react is handled INSIDE the main messages.upsert handler
+    // (see below) to avoid adding a second listener which doubles memory usage.
+    // We register it via a flag instead.
+    sock._newsletterReactEnabled = true;
 }
 
 // ─── Auto Join ────────────────────────────────────────────────
@@ -555,7 +639,7 @@ function _extendSocket(sock, store) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
     }, 120000);
-    sock._healthCheckInterval = healthCheckInterval;
+    tracker._healthCheckInterval = healthCheckInterval;
 
     sock.decodeJid = (jid) => {
         if (!jid) return jid;
