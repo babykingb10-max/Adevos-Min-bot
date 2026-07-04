@@ -1,1 +1,1 @@
-web: node --max-old-space-size=460 index.js
+web: node --max-old-space-size=460 --expose-gc index.js
