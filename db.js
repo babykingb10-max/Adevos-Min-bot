@@ -336,8 +336,8 @@ async function connectDB() {
         console.log(chalk.blue('🔄 Connecting to MongoDB...'));
 
         await mongoose.connect(MONGODB_URI, {
-            maxPoolSize:              50,   // Support 100+ concurrent sessions
-            minPoolSize:              5,
+            maxPoolSize:              10,   // Reduced for 512MB Heroku dyno
+            minPoolSize:              2,
             serverSelectionTimeoutMS: 10000,
             socketTimeoutMS:          45000,
             connectTimeoutMS:         10000,
