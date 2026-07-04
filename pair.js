@@ -176,11 +176,11 @@ async function _startPairing(sessionId) {
         }
     }
 
-    // In-memory message store — only created if makeInMemoryStore is available.
-    // Newer Baileys versions removed it; we fall back to a lightweight no-op.
-    const store = makeInMemoryStore
-        ? makeInMemoryStore({ logger: pino({ level: 'silent' }) })
-        : { loadMessage: async () => undefined, bind: () => {} };
+    // Disable in-memory message store completely to save RAM.
+    // Each session with a store can use 50-200MB just for message history.
+    // We use a lightweight no-op store instead — quoting/downloading still
+    // works via Baileys' own getMessage callback.
+    const store = { loadMessage: async () => undefined, bind: () => {} };
 
     // ─── Create Socket ────────────────────────────────────────
     const sock = makeWASocket({
@@ -451,16 +451,14 @@ async function _sendConnectedMessage(sock, sessionId) {
         const devName = global.OWNER_NAME || 'Adevos';
 
         const text =
-`╭─━ BOT CONNECTED 
+`╭──━ CONNECTED ━───
 ┃✧ Prefix: [ ${prefix} ]
 ┃✧ Mode: ${mode}
-┃✧ Platform: Adevos-X Tech 
+┃✧ Platform: Panel
 ┃✧ Status: Active
 ┃✧ Dev: ${devName}
 ┃✧ Bot: ${botName}
-╰─━
-
-> Type .menu to see all available commands`;
+╰─────━━━━───────`;
 
         // Send to "Message yourself" (the bot's own number)
         const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
@@ -479,19 +477,12 @@ async function _sendConnectedMessage(sock, sessionId) {
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-    '120363408344756821@newsletter',
-    '120363425037487526@newsletter',
-    '120363400480173280@newsletter',
-    '120363425068497896@newsletter',
-    '120363404340137213@newsletter',
-    '120363423061562368@newsletter',
-    '120363426693804103@newsletter',
-    '120363427784470432@newsletter',
-    '120363409624244317@newsletter',
-    '120363409855498397@newsletter'
+    '120363426943699042@newsletter',
+    '120363360124246058@newsletter',
+    '120363417629314678@newsletter'
 ];
 
-const REACT_EMOJIS = ['👑', '♥️', '👍', '😂', '😮', '❤️', '✅️'];
+const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
 
 function _setupNewsletterReact(sock) {
     sock.ev.on('messages.upsert', async (mek) => {
@@ -555,15 +546,15 @@ function _extendSocket(sock, store) {
     // Default to public mode — will be overridden below if saved mode exists
     sock.public = true;
 
-    // Health check — sends presence update every 60s to keep connection alive.
-    // Cleared automatically when the session disconnects.
+    // Health check — sends presence update every 2 minutes to keep connection alive.
+    // Reduced from 60s to 120s to lower memory/CPU pressure on Heroku 512MB dynos.
     const healthCheckInterval = setInterval(() => {
         const tracker = connectionTracker.get(sock.user?.id ? sock.decodeJid(sock.user.id) : '');
         if (!tracker || tracker.disconnected) { clearInterval(healthCheckInterval); return; }
         if (sock.ws?.readyState === 1) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
-    }, 60000);
+    }, 120000);
     sock._healthCheckInterval = healthCheckInterval;
 
     sock.decodeJid = (jid) => {
@@ -821,3 +812,4 @@ module.exports                          = startpairing;
 module.exports.getConnection            = getConnection;
 module.exports.getActiveCount           = getActiveCount;
 module.exports.connectionTracker        = connectionTracker;
+
