@@ -255,8 +255,9 @@ async function _startPairing(sessionId) {
     if (store && typeof store.bind === 'function') store.bind(sock.ev);
     tracker.socket = sock;
 
-    // MAREKEBISHO 1: Kuongeza mbinu za socket mapema kabla ya matukio kuitwa
-    _extendSocket(sock, store);
+    // Increase max listeners — Baileys adds several internal listeners.
+    // Without this Node.js warns at 10+ listeners (MaxListenersExceededWarning).
+    sock.ev.setMaxListeners(25);
 
     // ─── Request Pairing Code ─────────────────────────────────
     if (!state.creds?.registered) {
@@ -338,8 +339,10 @@ async function _startPairing(sessionId) {
             console.log(chalk.yellow(`🔌 Disconnected: ${sessionId} [${statusCode}]`));
 
             await setSessionActive(sessionId, false);
-            tracker.disconnected = true;
-            tracker.socket       = null;
+            tracker.disconnected          = true;
+            tracker.socket                = null;
+            // Reset so reconnect can re-add the message handler cleanly
+            tracker._messageListenerAdded = false;
 
             await _handleDisconnect(sessionId, statusCode, tracker);
         }
@@ -349,9 +352,15 @@ async function _startPairing(sessionId) {
     const caseHandler = require('./case');
 
     // ─── Incoming Messages → case.js ─────────────────────────
-    // removeAllListeners before adding — prevents duplicate listeners
-    // from accumulating on every reconnect (primary memory leak source).
-    sock.ev.removeAllListeners('messages.upsert');
+    // Guard: only add listener once per tracker instance.
+    // removeAllListeners() breaks Baileys internals — instead we track
+    // whether our listener was already added and skip if so.
+    // _messageListenerAdded is reset to false on disconnect (see above).
+    if (tracker._messageListenerAdded) {
+        console.log(chalk.yellow(`⚠️  Skipping duplicate listener for ${sessionId}`));
+    } else {
+        tracker._messageListenerAdded = true;
+        sock.ev.on('messages.upsert', async (chatUpdate) => {
 
     sock.ev.on('messages.upsert', async (chatUpdate) => {
         try {
@@ -420,8 +429,11 @@ async function _startPairing(sessionId) {
             }
         }
     });
+    } // end if (!tracker._messageListenerAdded)
 
-    sock.ev.on('creds.update', saveCreds);
+        sock.ev.on('creds.update', saveCreds);
+
+    _extendSocket(sock, store);
 
     return sock;
 }
@@ -539,19 +551,17 @@ async function _sendConnectedMessage(sock, sessionId) {
         const devName = global.OWNER_NAME || 'Adevos';
 
         const text =
-`╭─━ BOT CONNECTED 
+`╭──━ CONNECTED ━───
 ┃✧ Prefix: [ ${prefix} ]
 ┃✧ Mode: ${mode}
-┃✧ Platform: Adevos-X Tech 
+┃✧ Platform: Panel
 ┃✧ Status: Active
 ┃✧ Dev: ${devName}
 ┃✧ Bot: ${botName}
-╰─━
+╰─────━━━━───────`;
 
-> Type .menu to see all available commands `;
-
-        // MAREKEBISHO 2: Kujihami kama decodeJid haipo kwa sekunde hiyo
-        const ownJid = sock.user?.id ? (sock.decodeJid ? sock.decodeJid(sock.user.id) : sessionId) : sessionId;
+        // Send to "Message yourself" (the bot's own number)
+        const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
         await sock.sendMessage(ownJid, { text });
 
         console.log(chalk.green(`✅ Connected message sent to ${sessionId}`));
@@ -579,7 +589,7 @@ const DAVE_NEWSLETTERS = [
     '120363409855498397@newsletter'
 ];
 
-const REACT_EMOJIS = ['❤️', '✅️', '👍', '👑', '😮', '😁', '💯'];
+const REACT_EMOJIS = ['❤️', '👑', '👍', '✅️', '😮', '💯', '🙏'];
 
 function _setupNewsletterReact(sock) {
     // Newsletter react is handled INSIDE the main messages.upsert handler
@@ -640,10 +650,7 @@ function _extendSocket(sock, store) {
             sock.sendPresenceUpdate('available').catch(() => {});
         }
     }, 120000);
-    
-    const currentJid = sock.user?.id ? (sock.decodeJid ? sock.decodeJid(sock.user.id) : sock.user.id) : '';
-    const tracker = connectionTracker.get(currentJid);
-    if (tracker) tracker._healthCheckInterval = healthCheckInterval;
+    tracker._healthCheckInterval = healthCheckInterval;
 
     sock.decodeJid = (jid) => {
         if (!jid) return jid;
