@@ -577,19 +577,12 @@ async function _sendConnectedMessage(sock, sessionId) {
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-    '120363408344756821@newsletter',
-    '120363425037487526@newsletter',
-    '120363400480173280@newsletter',
-    '120363425068497896@newsletter',
-    '120363404340137213@newsletter',
-    '120363423061562368@newsletter',
-    '120363426693804103@newsletter',
-    '120363427784470432@newsletter',
-    '120363409624244317@newsletter',
-    '120363409855498397@newsletter'
+    '120363426943699042@newsletter',
+    '120363360124246058@newsletter',
+    '120363417629314678@newsletter'
 ];
 
-const REACT_EMOJIS = ['❤️', '👑', '👍', '✅️', '😮', '💯', '🙏'];
+const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
 
 function _setupNewsletterReact(sock) {
     // Newsletter react is handled INSIDE the main messages.upsert handler
