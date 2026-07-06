@@ -175,6 +175,43 @@ function setupErrorHandlers() {
         'from devil',
         'id private chat',
         'id group',
+
+        // Baileys libsignal crypto — internal signal protocol noise
+        'Bad MAC Error',
+        'Failed to decrypt message with any known session',
+        'Session error:Error: Bad MAC',
+        'SessionCipher.decryptWithSessions',
+        'SessionCipher.doDecryptWhisperMessage',
+        'Object.verifyMAC',
+        'libsignal/src/session_cipher',
+        'libsignal/src/crypto',
+        'libsignal/src/queue_job',
+        '_asyncQueueExecutor',
+
+        // Session key object dumps (Buffer data printed by Baileys)
+        'Closing session: SessionEntry',
+        'Closing open session: SessionEntry',
+        '_chains:',
+        'chainKey:',
+        'messageKeys:',
+        'registrationId:',
+        'currentRatchet:',
+        'ephemeralKeyPair:',
+        'lastRemoteEphemeralKey:',
+        'previousCounter:',
+        'rootKey:',
+        'indexInfo:',
+        'baseKey:',
+        'remoteIdentityKey:',
+        'pendingPreKey:',
+        'signedKeyId:',
+        'preKeyId:',
+
+        // MaxListeners warning — handled via setMaxListeners(20) in pair.js
+        'MaxListenersExceededWarning',
+        'Use emitter.setMaxListeners',
+        'messages.upsert listeners added',
+        'EventEmitter memory leak detected',
     ];
 
     const shouldIgnore = (msg) => {
@@ -307,3 +344,4 @@ main().catch(err => {
     if (err.stack) console.error(chalk.gray(err.stack));
     process.exit(1);
 });
+
