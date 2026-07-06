@@ -352,84 +352,77 @@ async function _startPairing(sessionId) {
     const caseHandler = require('./case');
 
     // ─── Incoming Messages → case.js ─────────────────────────
-    // Guard: only add listener once per tracker instance.
-    // removeAllListeners() breaks Baileys internals — instead we track
-    // whether our listener was already added and skip if so.
-    // _messageListenerAdded is reset to false on disconnect (see above).
-    if (tracker._messageListenerAdded) {
-        console.log(chalk.yellow(`⚠️  Skipping duplicate listener for ${sessionId}`));
-    } else {
+    // Guard: add listener only once per tracker lifetime.
+    // _messageListenerAdded is reset to false on every disconnect
+    // so reconnect can safely add it again.
+    if (!tracker._messageListenerAdded) {
         tracker._messageListenerAdded = true;
+
         sock.ev.on('messages.upsert', async (chatUpdate) => {
-
-    sock.ev.on('messages.upsert', async (chatUpdate) => {
-        try {
-            const msg = chatUpdate.messages?.[0];
-            if (!msg?.message) return;
-
-            // Drop messages older than 5 minutes — prevents processing
-            // backlogged messages after reconnect which flood memory and CPU.
-            const msgTimestamp = msg.messageTimestamp
-                ? (typeof msg.messageTimestamp === 'object'
-                    ? msg.messageTimestamp.low
-                    : msg.messageTimestamp)
-                : 0;
-            if (msgTimestamp && (Date.now() / 1000) - msgTimestamp > 300) return;
-
-            msg.message = (Object.keys(msg.message)[0] === 'ephemeralMessage')
-                ? msg.message.ephemeralMessage.message
-                : msg.message;
-
-            if (!sock.public && !msg.key.fromMe && chatUpdate.type === 'notify') return;
-            if (msg.key.id.startsWith('BAE5') && msg.key.id.length === 16) return;
-
-            // Handle newsletter auto-react inline (avoids a second listener)
-            if (sock._newsletterReactEnabled && msg?.key?.server_id) {
-                if (DAVE_NEWSLETTERS.includes(msg.key.remoteJid)) {
-                    const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
-                    sock.newsletterReactMessage(
-                        msg.key.remoteJid,
-                        msg.key.server_id.toString(),
-                        emoji
-                    ).catch(() => {});
-                    return; // Newsletter posts don't need command processing
-                }
-            }
-
-            const mek = smsg(sock, msg, store);
-
-            global.mek  = mek;
-            global.King = sock;
-
-            // Log ONLY command messages (starting with prefix) — not every chat message.
-            // This is the single biggest source of console noise and string allocation.
-            const body = mek.body || '';
-            const prefix = global.prefa?.[2] || '.';
-            const isCommand = body.startsWith(prefix);
-            if (isCommand) {
-                const cmd = body.slice(prefix.length).split(' ')[0].toLowerCase();
-                console.log(chalk.cyan(
-                    `📨 [${sessionId.split('@')[0]}] ${msg.key.remoteJid?.split('@')[0]} → ${prefix}${cmd}`
-                ));
-            }
-
-            // Run command handler — errors are caught and logged only for commands
             try {
-                caseHandler(sock, mek, chatUpdate, store);
-            } catch (cmdErr) {
+                const msg = chatUpdate.messages?.[0];
+                if (!msg?.message) return;
+
+                // Drop messages older than 5 minutes — prevents processing
+                // backlogged messages after reconnect which flood memory and CPU.
+                const msgTimestamp = msg.messageTimestamp
+                    ? (typeof msg.messageTimestamp === 'object'
+                        ? msg.messageTimestamp.low
+                        : msg.messageTimestamp)
+                    : 0;
+                if (msgTimestamp && (Date.now() / 1000) - msgTimestamp > 300) return;
+
+                msg.message = (Object.keys(msg.message)[0] === 'ephemeralMessage')
+                    ? msg.message.ephemeralMessage.message
+                    : msg.message;
+
+                if (!sock.public && !msg.key.fromMe && chatUpdate.type === 'notify') return;
+                if (msg.key.id.startsWith('BAE5') && msg.key.id.length === 16) return;
+
+                // Handle newsletter auto-react inline (avoids a second listener)
+                if (sock._newsletterReactEnabled && msg?.key?.server_id) {
+                    if (DAVE_NEWSLETTERS.includes(msg.key.remoteJid)) {
+                        const emoji = REACT_EMOJIS[Math.floor(Math.random() * REACT_EMOJIS.length)];
+                        sock.newsletterReactMessage(
+                            msg.key.remoteJid,
+                            msg.key.server_id.toString(),
+                            emoji
+                        ).catch(() => {});
+                        return;
+                    }
+                }
+
+                const mek = smsg(sock, msg, store);
+                global.mek  = mek;
+                global.King = sock;
+
+                // Log ONLY command messages (starting with prefix)
+                const body      = mek.body || '';
+                const prefix    = global.prefa?.[2] || '.';
+                const isCommand = body.startsWith(prefix);
                 if (isCommand) {
-                    console.error(chalk.red(`❌ Command error [${body.slice(0, 30)}]: ${cmdErr.message}`));
+                    const cmd = body.slice(prefix.length).split(' ')[0].toLowerCase();
+                    console.log(chalk.cyan(
+                        `📨 [${sessionId.split('@')[0]}] ${msg.key.remoteJid?.split('@')[0]} → ${prefix}${cmd}`
+                    ));
+                }
+
+                // Run command handler — log errors only for commands
+                try {
+                    caseHandler(sock, mek, chatUpdate, store);
+                } catch (cmdErr) {
+                    if (isCommand) {
+                        console.error(chalk.red(`❌ Command error [${body.slice(0, 30)}]: ${cmdErr.message}`));
+                    }
+                }
+
+            } catch (err) {
+                if (err.message && !err.message.includes('Bad MAC') && !err.message.includes('decrypt')) {
+                    console.error(chalk.red(`❌ Message handler: ${err.message}`));
                 }
             }
-
-        } catch (err) {
-            // Only log if it's a meaningful error, not routine noise
-            if (err.message && !err.message.includes('Bad MAC') && !err.message.includes('decrypt')) {
-                console.error(chalk.red(`❌ Message handler: ${err.message}`));
-            }
-        }
-    });
-    } // end if (!tracker._messageListenerAdded)
+        });
+    }
 
         sock.ev.on('creds.update', saveCreds);
 
@@ -900,4 +893,3 @@ module.exports                          = startpairing;
 module.exports.getConnection            = getConnection;
 module.exports.getActiveCount           = getActiveCount;
 module.exports.connectionTracker        = connectionTracker;
-
