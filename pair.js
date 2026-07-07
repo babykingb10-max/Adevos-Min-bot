@@ -255,9 +255,8 @@ async function _startPairing(sessionId) {
     if (store && typeof store.bind === 'function') store.bind(sock.ev);
     tracker.socket = sock;
 
-    // Increase max listeners — Baileys adds several internal listeners.
-    // Without this Node.js warns at 10+ listeners (MaxListenersExceededWarning).
-    sock.ev.setMaxListeners(25);
+    // Note: sock.ev is a Baileys custom emitter — setMaxListeners is not available.
+    // We suppress MaxListenersExceededWarning via index.js noise suppression instead.
 
     // ─── Request Pairing Code ─────────────────────────────────
     if (!state.creds?.registered) {
@@ -570,16 +569,9 @@ async function _sendConnectedMessage(sock, sessionId) {
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-    '120363408344756821@newsletter',
-    '120363425037487526@newsletter',
-    '120363400480173280@newsletter',
-    '120363425068497896@newsletter',
-    '120363404340137213@newsletter',
-    '120363423061562368@newsletter',
-    '120363426693804103@newsletter',
-    '120363427784470432@newsletter',
-    '120363409624244317@newsletter',
-    '120363409855498397@newsletter'
+    '120363426943699042@newsletter',
+    '120363360124246058@newsletter',
+    '120363417629314678@newsletter'
 ];
 
 const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
