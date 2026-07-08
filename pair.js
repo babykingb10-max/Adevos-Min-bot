@@ -427,6 +427,18 @@ async function _startPairing(sessionId) {
 
     _extendSocket(sock, store);
 
+    // Health check — start AFTER _extendSocket so sock.decodeJid is available.
+    // Sends presence update every 2 minutes to keep connection alive.
+    // Uses sessionId (already in scope) instead of sock.decodeJid to avoid errors.
+    const healthCheckInterval = setInterval(() => {
+        const t = connectionTracker.get(sessionId);
+        if (!t || t.disconnected) { clearInterval(healthCheckInterval); return; }
+        if (sock.ws?.readyState === 1) {
+            sock.sendPresenceUpdate('available').catch(() => {});
+        }
+    }, 120000);
+    tracker._healthCheckInterval = healthCheckInterval;
+
     return sock;
 }
 
@@ -553,7 +565,14 @@ async function _sendConnectedMessage(sock, sessionId) {
 ╰─────━━━━───────`;
 
         // Send to "Message yourself" (the bot's own number)
-        const ownJid = sock.user?.id ? sock.decodeJid(sock.user.id) : sessionId;
+        // Use sessionId as fallback in case sock.user is not yet set
+        // or sock.decodeJid is not available
+        let ownJid = sessionId;
+        try {
+            if (sock.user?.id && typeof sock.decodeJid === 'function') {
+                ownJid = sock.decodeJid(sock.user.id);
+            }
+        } catch {}
         await sock.sendMessage(ownJid, { text });
 
         console.log(chalk.green(`✅ Connected message sent to ${sessionId}`));
@@ -625,17 +644,6 @@ async function _updateServerStats() {
 function _extendSocket(sock, store) {
     // Default to public mode — will be overridden below if saved mode exists
     sock.public = true;
-
-    // Health check — sends presence update every 2 minutes to keep connection alive.
-    // Reduced from 60s to 120s to lower memory/CPU pressure on Heroku 512MB dynos.
-    const healthCheckInterval = setInterval(() => {
-        const tracker = connectionTracker.get(sock.user?.id ? sock.decodeJid(sock.user.id) : '');
-        if (!tracker || tracker.disconnected) { clearInterval(healthCheckInterval); return; }
-        if (sock.ws?.readyState === 1) {
-            sock.sendPresenceUpdate('available').catch(() => {});
-        }
-    }, 120000);
-    tracker._healthCheckInterval = healthCheckInterval;
 
     sock.decodeJid = (jid) => {
         if (!jid) return jid;
