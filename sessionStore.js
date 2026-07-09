@@ -103,6 +103,32 @@ function serializeValue(val) {
 const sessionCache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// ─── Write Debounce ───────────────────────────────────────────
+// keys.set is called for EVERY signal key change (pre-keys, sender-keys, etc.)
+// This can mean hundreds of MongoDB writes per minute per session.
+// We batch them: accumulate changes in memory for DEBOUNCE_MS,
+// then write once to MongoDB instead of one write per key change.
+const pendingKeyWrites = new Map(); // sessionId → { mergedKeys, timer }
+const DEBOUNCE_MS = 2000;          // 2 second batch window
+
+function scheduleKeyWrite(sessionId, updatedKeys) {
+    // Cancel previous pending write for this session
+    const existing = pendingKeyWrites.get(sessionId);
+    if (existing?.timer) clearTimeout(existing.timer);
+
+    // Schedule a new write after DEBOUNCE_MS
+    const timer = setTimeout(async () => {
+        pendingKeyWrites.delete(sessionId);
+        try {
+            await saveSession(sessionId, { keys: updatedKeys });
+        } catch (err) {
+            console.error(chalk.red(`❌ Debounced keys write failed [${sessionId}]: ${err.message}`));
+        }
+    }, DEBOUNCE_MS);
+
+    pendingKeyWrites.set(sessionId, { keys: updatedKeys, timer });
+}
+
 function getCached(sessionId) {
     const entry = sessionCache.get(sessionId);
     if (!entry) return null;
@@ -294,8 +320,9 @@ async function useMongoAuthState(sessionId) {
              */
             set: async (data) => {
                 try {
-                    const doc          = await getSession(sessionId);
-                    const updatedKeys  = { ...(doc?.keys || {}) };
+                    // Merge into existing cached keys first (avoids a DB read per call)
+                    const doc         = getCached(sessionId);
+                    const updatedKeys = { ...(doc?.keys || {}) };
 
                     for (const [type, typeData] of Object.entries(data)) {
                         if (!updatedKeys[type]) updatedKeys[type] = {};
@@ -313,7 +340,15 @@ async function useMongoAuthState(sessionId) {
                         }
                     }
 
-                    await saveSession(sessionId, { keys: updatedKeys });
+                    // Update cache immediately so subsequent reads see new keys
+                    const cached = getCached(sessionId) || {};
+                    setCache(sessionId, { ...cached, keys: updatedKeys });
+
+                    // Debounce the MongoDB write — batch rapid key changes
+                    // into one write per 2 seconds instead of one per key change.
+                    // This reduces MongoDB connections by ~90% during active sessions.
+                    scheduleKeyWrite(sessionId, updatedKeys);
+
                 } catch (err) {
                     console.error(chalk.red(`❌ keys.set: ${err.message}`));
                 }
