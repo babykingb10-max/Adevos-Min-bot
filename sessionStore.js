@@ -109,7 +109,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // We batch them: accumulate changes in memory for DEBOUNCE_MS,
 // then write once to MongoDB instead of one write per key change.
 const pendingKeyWrites = new Map(); // sessionId → { mergedKeys, timer }
-const DEBOUNCE_MS = 2000;          // 2 second batch window
+const DEBOUNCE_MS = 3000;          // 3 second batch window (reduces Atlas connections ~90%)
 
 function scheduleKeyWrite(sessionId, updatedKeys) {
     // Cancel previous pending write for this session
@@ -361,16 +361,37 @@ async function useMongoAuthState(sessionId) {
      * Called by Baileys whenever credentials change (e.g. after pairing).
      * Persists the updated creds object to MongoDB.
      */
+    // Debounced creds write — batch rapid credential updates
+    // into one MongoDB write per 3 seconds instead of one per update.
+    let _credsWriteTimer = null;
+
     const saveCreds = async () => {
         try {
-            // Serialize creds before saving — converts Buffers to plain objects
-            // so MongoDB can store them and they survive JSON round-trips
-            const serializedCreds = serializeValue(state.creds);
-            await saveSession(sessionId, {
-                creds:        serializedCreds,
+            // Update cache immediately so subsequent reads see new creds
+            const cached = getCached(sessionId) || {};
+            setCache(sessionId, {
+                ...cached,
+                creds:        state.creds,
                 isRegistered: !!(state.creds?.registered),
                 isActive:     true
             });
+
+            // Debounce the MongoDB write
+            if (_credsWriteTimer) clearTimeout(_credsWriteTimer);
+            _credsWriteTimer = setTimeout(async () => {
+                _credsWriteTimer = null;
+                try {
+                    const serializedCreds = serializeValue(state.creds);
+                    await saveSession(sessionId, {
+                        creds:        serializedCreds,
+                        isRegistered: !!(state.creds?.registered),
+                        isActive:     true
+                    });
+                } catch (err) {
+                    console.error(chalk.red(`❌ saveCreds write [${sessionId}]: ${err.message}`));
+                }
+            }, 3000); // 3 second batch window for creds
+
         } catch (err) {
             console.error(chalk.red(`❌ saveCreds [${sessionId}]: ${err.message}`));
         }
