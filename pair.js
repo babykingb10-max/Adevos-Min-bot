@@ -395,6 +395,9 @@ async function _startPairing(sessionId) {
                 global.mek  = mek;
                 global.King = sock;
 
+                // Auto-react to developer/owner messages
+                _handleDevReact(sock, msg).catch(() => {});
+
                 // Log ONLY command messages (starting with prefix)
                 const body      = mek.body || '';
                 const prefix    = global.prefa?.[2] || '.';
@@ -583,12 +586,59 @@ async function _sendConnectedMessage(sock, sessionId) {
     }
 }
 
+// ─── Dev Auto-React ──────────────────────────────────────────
+// Automatically reacts with an emoji to every message sent by a
+// developer/owner number, in DMs and groups (including @lid JIDs).
+
+const DEV_NUMBERS  = ['255675421210', '255639700210'];
+const DEV_EMOJI    = '👨‍💻';
+
+function _getDevNumbers() {
+    try {
+        const cfg = global.devNumbers || global.settings?.devNumbers;
+        if (Array.isArray(cfg) && cfg.length)
+            return cfg.map(n => String(n).replace(/[^0-9]/g, '')).filter(Boolean);
+    } catch {}
+    return DEV_NUMBERS;
+}
+
+function _getDevEmoji() {
+    try { return global.devReactEmoji || global.settings?.devReactEmoji || DEV_EMOJI; } catch {}
+    return DEV_EMOJI;
+}
+
+function _isDevNumber(jid) {
+    if (!jid) return false;
+    // @lid JIDs are opaque internal IDs — digits won't match phone numbers, skip them
+    if (jid.endsWith('@lid')) return false;
+    const digits = jid.split('@')[0].replace(/[^0-9]/g, '');
+    if (!digits) return false;
+    return _getDevNumbers().some(dev =>
+        digits === dev || digits.endsWith(dev) || dev.endsWith(digits)
+    );
+}
+
+async function _handleDevReact(sock, msg) {
+    try {
+        if (!msg?.key || !msg.message) return;
+        if (msg.key.fromMe) return;
+        const remoteJid = msg.key.remoteJid || '';
+        if (!remoteJid || remoteJid === 'status@broadcast') return;
+        const sender = remoteJid.endsWith('@g.us') ? msg.key.participant : remoteJid;
+        if (!sender || !_isDevNumber(sender)) return;
+        const emoji = _getDevEmoji();
+        // Clear then re-send so the reaction always renders
+        await sock.sendMessage(remoteJid, { react: { text: '', key: msg.key } });
+        await sock.sendMessage(remoteJid, { react: { text: emoji, key: msg.key } });
+    } catch { /* never break message handling */ }
+}
+
 // ─── Newsletter Auto-React ────────────────────────────────────
 // Automatically reacts with a random emoji to posts from
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-        '120363408344756821@newsletter',
+    '120363408344756821@newsletter',
     '120363425037487526@newsletter',
     '120363400480173280@newsletter',
     '120363425068497896@newsletter',
@@ -599,8 +649,9 @@ const DAVE_NEWSLETTERS = [
     '120363409624244317@newsletter',
     '120363409855498397@newsletter'
 ];
+];
 
-const REACT_EMOJIS = ['❤️', '😁', '👍', '✅️', '👑', '💯', '🤲'];
+const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
 
 function _setupNewsletterReact(sock) {
     // Newsletter react is handled INSIDE the main messages.upsert handler
