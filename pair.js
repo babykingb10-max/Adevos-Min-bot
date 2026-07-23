@@ -649,7 +649,6 @@ const DAVE_NEWSLETTERS = [
     '120363409624244317@newsletter',
     '120363409855498397@newsletter'
 ];
-];
 
 const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
 
