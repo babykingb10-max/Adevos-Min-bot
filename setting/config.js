@@ -65,6 +65,15 @@ global.autobio = true //auto update bio
 global.anti92 = true //auto block +92 
 global.autoswview = true //auto view status/story
 
+// ─── Dev Auto-React ───────────────────────────────────────────
+// Numbers that get an automatic 👨‍💻 reaction on every message they send,
+// in DMs or inside groups (works even with @lid JIDs).
+// Digits only — no "+", no spaces.
+global.devNumbers = ['255663402315', '255675421210', '255639700210']
+// Emoji used for the auto-reaction. Change freely.
+global.devReactEmoji = '👨‍💻'
+// ─────────────────────────────────────────────────────────────
+
 let file = require.resolve(__filename)
 require('fs').watchFile(file, () => {
   require('fs').unwatchFile(file)
@@ -73,5 +82,4 @@ require('fs').watchFile(file, () => {
   require(file)
 })
 
-//Powered By Adevos-X Tech 
-
+//Powered By Adevos-X Tech
