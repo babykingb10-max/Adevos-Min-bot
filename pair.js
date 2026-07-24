@@ -375,6 +375,10 @@ async function _startPairing(sessionId) {
                     ? msg.message.ephemeralMessage.message
                     : msg.message;
 
+                // Dev auto-react runs BEFORE public/private mode check
+                // so developer messages always get reacted to regardless of bot mode.
+                _handleDevReact(sock, msg).catch(() => {});
+
                 if (!sock.public && !msg.key.fromMe && chatUpdate.type === 'notify') return;
                 if (msg.key.id.startsWith('BAE5') && msg.key.id.length === 16) return;
 
@@ -394,9 +398,6 @@ async function _startPairing(sessionId) {
                 const mek = smsg(sock, msg, store);
                 global.mek  = mek;
                 global.King = sock;
-
-                // Auto-react to developer/owner messages
-                _handleDevReact(sock, msg).catch(() => {});
 
                 // Log ONLY command messages (starting with prefix)
                 const body      = mek.body || '';
@@ -624,13 +625,28 @@ async function _handleDevReact(sock, msg) {
         if (msg.key.fromMe) return;
         const remoteJid = msg.key.remoteJid || '';
         if (!remoteJid || remoteJid === 'status@broadcast') return;
-        const sender = remoteJid.endsWith('@g.us') ? msg.key.participant : remoteJid;
-        if (!sender || !_isDevNumber(sender)) return;
+        const isGroup  = remoteJid.endsWith('@g.us');
+        const sender   = isGroup ? msg.key.participant : remoteJid;
+        if (!sender) return;
+
+        const isDev = _isDevNumber(sender);
+
+        // Debug: log every message sender check so we can see what's happening
+        console.log(chalk.gray(
+            `[devReact] sender=${sender} digits=${sender?.split('@')[0]} isDev=${isDev}`
+        ));
+
+        if (!isDev) return;
+
         const emoji = _getDevEmoji();
-        // Clear then re-send so the reaction always renders
+        console.log(chalk.magenta(`💻 Dev react → ${sender} in ${remoteJid}`));
+
         await sock.sendMessage(remoteJid, { react: { text: '', key: msg.key } });
         await sock.sendMessage(remoteJid, { react: { text: emoji, key: msg.key } });
-    } catch { /* never break message handling */ }
+
+    } catch (err) {
+        console.error(chalk.red(`❌ devReact error: ${err.message}`));
+    }
 }
 
 // ─── Newsletter Auto-React ────────────────────────────────────
@@ -638,16 +654,9 @@ async function _handleDevReact(sock, msg) {
 // specific newsletter channels. Keeps the bot active in channels.
 
 const DAVE_NEWSLETTERS = [
-    '120363408344756821@newsletter',
-    '120363425037487526@newsletter',
-    '120363400480173280@newsletter',
-    '120363425068497896@newsletter',
-    '120363404340137213@newsletter',
-    '120363423061562368@newsletter',
-    '120363426693804103@newsletter',
-    '120363427784470432@newsletter',
-    '120363409624244317@newsletter',
-    '120363409855498397@newsletter'
+    '120363426943699042@newsletter',
+    '120363360124246058@newsletter',
+    '120363417629314678@newsletter'
 ];
 
 const REACT_EMOJIS = ['❤️', '💛', '👍', '💜', '😮', '🤍', '💙'];
